@@ -177,8 +177,9 @@ export PATH="$HOME/.local/bin:$HOME/.npm-global/bin:$HOME/.bun/bin:$PATH"
 ## Optional flags (install script)
 
 ```bash
-bash scripts/install-super-pro-skills.sh --with-aws      # AWS selective (default: on)
-bash scripts/install-super-pro-skills.sh --skip-optional # Core packs only
-bash scripts/install-super-pro-skills.sh --with-gstack   # Clone/setup gstack
-bash scripts/install-super-pro-skills.sh --with-tools    # agent-browser + specify-cli
+bash scripts/install-super-pro-skills.sh                   # Full stack (AWS selective included)
+bash scripts/install-super-pro-skills.sh --skip-optional   # Core packs only (no supabase/cloudflare/aws)
+bash scripts/install-super-pro-skills.sh --no-aws          # Skip AWS selective pack only
+bash scripts/install-super-pro-skills.sh --with-gstack     # Clone/setup gstack
+bash scripts/install-super-pro-skills.sh --with-tools      # agent-browser + specify-cli
 ```

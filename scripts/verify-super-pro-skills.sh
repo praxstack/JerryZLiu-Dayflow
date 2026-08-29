@@ -58,6 +58,36 @@ check_skill supabase
 check_skill cloudflare
 check_skill aws-security
 
+echo "[verify-praxstack] Checking Prax personal workflow (skills-and-personas) ..."
+PRAXSTACK_SKILLS=(
+  kingmode
+  apex-autonomous-mode
+  techtutor
+  chronicle
+  teach-pro-max
+  constellation-team
+  blueprint-creator
+  superimprove
+  backend-pe
+  product-manager
+  principal-engineer
+)
+for s in "${PRAXSTACK_SKILLS[@]}"; do
+  check_skill "$s"
+done
+
+if [[ -f "${HOME}/.agents/.skills-and-personas.json" ]]; then
+  ok "manifest stamp: ~/.agents/.skills-and-personas.json"
+else
+  warn "skills-and-personas stamp missing (run install-praxstack-personas.sh)"
+fi
+
+if [[ -L "${HOME}/.agents/personas/personas" ]] || [[ -d "${HOME}/.agents/personas/personas" ]]; then
+  ok "personas: ~/.agents/personas/personas"
+else
+  warn "personas not linked (run install-praxstack-personas.sh)"
+fi
+
 echo "[verify-praxstack] Checking PraxStack extension skills ..."
 check_skill last30days
 check_skill deep-research
@@ -95,6 +125,10 @@ SLASH_CHECKS=(
   deep-research
   hallmark
   web-design-guidelines
+  kingmode
+  teach-pro-max
+  chronicle
+  apex-autonomous-mode
 )
 for s in "${SLASH_CHECKS[@]}"; do
   if [[ -f "${HOME}/.agents/skills/${s}/SKILL.md" ]]; then

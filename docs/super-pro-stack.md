@@ -97,6 +97,78 @@ PraxStack layers **discover → spec → plan → implement → review → secur
 | 10 | **Context7** | Live library docs MCP | `~/.cursor/mcp.json` |
 | 11 | **Graphify** | Code knowledge graph | `uv tool install graphifyy` |
 | 12 | **pstack** | Poteto-mode (Desktop) | `/add-plugin pstack` |
+| 13 | **skills-and-personas** | Prax personal workflow layer | `bash scripts/install-praxstack-personas.sh` |
+
+---
+
+## Prax personal workflow layer (skills-and-personas)
+
+**Source:** [praxstack/skills-and-personas](https://github.com/praxstack/skills-and-personas)  
+**Install:** `bash scripts/install-praxstack-personas.sh` (also runs as part of `install-praxstack-skills.sh`)
+
+This is Prax's curated portfolio of production skills distilled from personas, team roles, and knowledge packs. It sits **on top of** the super-pro base stack.
+
+### What gets installed
+
+| Layer | Path | Purpose |
+|-------|------|---------|
+| **Canonical skills** (41) | `~/.agents/skills/<name>/` | Symlinked from `new-skills/` — linted, council-reviewed |
+| **Legacy + public skills** (87 total via npx) | `~/.agents/skills/` | Includes `teach-pro-max`, `superimprove`, `coding-agent-leadership-principles`, brain-ingest suite, etc. |
+| **Personas** (reference) | `~/.agents/personas/` | Raw persona packs — not auto-discovered; use when you need source prompts |
+| **Manifest stamp** | `~/.agents/.skills-and-personas.json` | Commit SHA + install timestamp |
+
+**Cached clone:** `~/.agents/praxstack/skills-and-personas`
+
+### Goals
+
+There is **no separate goals/ directory** or Cursor CreateGoal integration in this repo. "Goals" are embedded in skill descriptions and persona prompts (e.g. `product-manager` for roadmap goals, `apex-autonomous-mode` for execution contracts, `chronicle` for journaling goals). Invoke the relevant skill for goal-oriented work.
+
+### Personas (reference layer)
+
+Personas are preserved source material; skills in `new-skills/` are the production runtime form.
+
+| Persona | Skill equivalent | Purpose |
+|---------|------------------|---------|
+| Ren Nakamura | `techtutor` | Intuition-first technical mentor (DSA, system design, AI/ML) |
+| Gabriel Petersson | `gabriel-petersson-topdown-mentor` | Top-down recursive gap-filling learning |
+| Lecture Alchemist | `lecture-alchemist` | Zoom transcript → retention-optimized study materials |
+| Professor Alex | `professor-alex-interview` | FAANG/HFT interview prep with guided discovery |
+| Chronicle | `chronicle` | Personal journal intelligence with pattern analysis |
+| Baron von Markup | `baron-von-markup` | Markdown formatting architect |
+| Constellation Team | `constellation-team` | Six-role cross-functional team workflow |
+| Teach Pro Max | `teach-pro-max` | Evidence-oriented adaptive teaching system |
+| prax-lannister | — | Memory/context prompt for Prax-specific context |
+
+**md-personas/** single-file prompts: `KINGMODE.md`, `SUPER-MODE.md`, `ULTRATHINK-FRONTEND.md`, `CONSTELLATION-TEAM.md`, `FRONTEND-DESIGN.md`, `FRONTEND-PE.md`, `BACKEND-PE.md`
+
+### Key slash commands (skills-and-personas)
+
+| Command | Skill | Purpose |
+|---------|-------|---------|
+| `/kingmode` | kingmode | Principal-engineer depth routing (backend/frontend/security) |
+| `/apex-autonomous-mode` or `/apex` | apex-autonomous-mode | Rigorous autonomous execution with keep-or-revert |
+| `/techtutor` | techtutor | Intuition-first explanations with 6-layer framework |
+| `/chronicle` | chronicle | Personal journal intelligence |
+| `/teach-pro-max` | teach-pro-max | Adaptive teaching with evidence tracking |
+| `/constellation-team` | constellation-team | Cross-functional team roles (PM, PE, QA, DevOps, etc.) |
+| `/blueprint-creator` | blueprint-creator | Expand SPEC.md into implementation bible |
+| `/superimprove` | superimprove | Bounded audit-fix-review-verify loop |
+| `/backend-pe` | backend-pe | Backend PE orchestrator (routes to language variants) |
+| `/product-manager` | product-manager | PRDs, roadmap, prioritization |
+| `/professor-alex-interview` | professor-alex-interview | FAANG/HFT mock interviews |
+| `/lecture-alchemist` | lecture-alchemist | Transcript → study materials |
+| `/mental-health-screening-companion` | mental-health-screening-companion | Scoped self-reflection (see SAFETY.md) |
+
+Language-specific backend: `/backend-pe-python`, `/backend-pe-typescript`, `/backend-pe-java`, `/backend-pe-cpp`, `/backend-pe-nodejs`, `/backend-pe-javascript`, `/backend-pe-python-ml`
+
+### Install flags
+
+```bash
+bash scripts/install-praxstack-personas.sh              # Full install
+bash scripts/install-praxstack-personas.sh --skip-npx   # Only symlink new-skills/
+bash scripts/install-praxstack-personas.sh --skip-personas  # Skills only
+bash scripts/install-praxstack-personas.sh --refresh    # git pull cached clone
+```
 
 ---
 
@@ -270,6 +342,7 @@ bash scripts/install-praxstack-skills.sh --with-tools       # + agent-browser, s
 bash scripts/install-praxstack-skills.sh --skip-super-pro   # Extensions only
 bash scripts/install-praxstack-skills.sh --skip-optional    # Skip cloud/vendor optional packs
 bash scripts/install-praxstack-skills.sh --no-gstack        # Skip gstack
+bash scripts/install-praxstack-personas.sh                  # Prax personal workflow only
 bash scripts/install-super-pro-skills.sh                    # Base stack only
 bash scripts/install-gstack-skills.sh                       # gstack only
 ```

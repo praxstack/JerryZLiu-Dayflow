@@ -239,6 +239,7 @@ main() {
   fi
 
   install_praxstack_packs
+  bash "${ROOT}/scripts/install-praxstack-personas.sh"
   install_openspec_global
   install_graphify
   install_impeccable

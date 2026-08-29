@@ -200,6 +200,13 @@
       "note": "Selective — do not install all 181 skills"
     },
     {
+      "repo": "praxstack/skills-and-personas",
+      "skills": ["*"],
+      "tier": "S",
+      "layer": "all",
+      "note": "Prax personal workflow: kingmode, apex, constellation-team, teach-pro-max, chronicle, backend-pe variants, etc. Setup: bash scripts/install-praxstack-personas.sh"
+    },
+    {
       "repo": "nvidia/skills",
       "skills": [
         "nvidia-skill-finder",

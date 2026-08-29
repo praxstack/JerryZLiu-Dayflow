@@ -163,6 +163,7 @@ main() {
   fi
 
   log "Done. Global lock: ${HOME}/.agents/.skill-lock.json"
+  log "For full PraxStack (OpenSpec, Graphify, Stitch, etc.): bash scripts/install-praxstack-skills.sh --skip-super-pro"
   log "Verify with: bash scripts/verify-super-pro-skills.sh"
 }
 

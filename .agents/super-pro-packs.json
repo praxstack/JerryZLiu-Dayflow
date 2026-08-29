@@ -1,7 +1,7 @@
 {
-  "version": 1,
-  "description": "Manifest of super-pro skill packs for Dayflow Cloud Agents. Installs are global (-g) to ~/.agents/skills. Sync state: ~/.agents/.skill-lock.json",
-  "installCommand": "bash scripts/install-super-pro-skills.sh",
+  "version": 2,
+  "description": "PraxStack manifest for Dayflow Cloud Agents. Installs globally to ~/.agents/skills. Sync: ~/.agents/.skill-lock.json",
+  "installCommand": "bash scripts/install-praxstack-skills.sh",
   "packs": [
     {
       "repo": "vercel-labs/skills",
@@ -139,23 +139,137 @@
       "skills": ["tdd"],
       "tier": "A",
       "layer": "implement"
+    },
+    {
+      "repo": "mvanhorn/last30days-skill",
+      "skills": ["last30days"],
+      "tier": "A",
+      "layer": "discover",
+      "note": "Research recent news/trends"
+    },
+    {
+      "repo": "24601/agent-deep-research",
+      "skills": ["deep-research"],
+      "tier": "A",
+      "layer": "discover"
+    },
+    {
+      "repo": "nutlope/hallmark",
+      "skills": ["hallmark"],
+      "tier": "A",
+      "layer": "implement"
+    },
+    {
+      "repo": "google-labs-code/stitch-skills",
+      "skills": [
+        "stitch-generate-design",
+        "stitch-react-components",
+        "stitch-code-to-design"
+      ],
+      "tier": "A",
+      "layer": "implement",
+      "note": "Cursor target; selective Stitch skills"
+    },
+    {
+      "repo": "remotion-dev/skills",
+      "skills": ["*"],
+      "tier": "A",
+      "layer": "implement",
+      "note": "Video/remotion workflows"
+    },
+    {
+      "repo": "wshobson/agents",
+      "skills": [
+        "api-design-principles",
+        "architecture-patterns",
+        "architecture-decision-records",
+        "code-review-excellence",
+        "context-driven-development",
+        "microservices-patterns",
+        "auth-implementation-patterns",
+        "accessibility-compliance",
+        "before-you-build",
+        "hads",
+        "cqrs-implementation",
+        "bash-defensive-patterns",
+        "event-store-design",
+        "projection-patterns"
+      ],
+      "tier": "A",
+      "layer": "plan",
+      "note": "Selective — do not install all 181 skills"
+    },
+    {
+      "repo": "nvidia/skills",
+      "skills": [
+        "nvidia-skill-finder",
+        "cudaq-guide",
+        "jetson-quick-start",
+        "deepstream-dev",
+        "nemo-rl-docs",
+        "physicsnemo-discover",
+        "dynamo-troubleshoot",
+        "rag-blueprint"
+      ],
+      "tier": "A",
+      "layer": "ship",
+      "optional": true,
+      "note": "Selective GPU/AI infra skills"
     }
   ],
   "external": [
     {
       "name": "gstack",
       "setup": "bash scripts/install-gstack-skills.sh",
-      "tier": "S"
+      "tier": "S",
+      "note": "Links ~/.cursor/skills/gstack-* into ~/.agents/skills"
     },
     {
       "name": "pstack",
-      "setup": "Manual copy or /add-plugin pstack on Desktop",
-      "tier": "S"
+      "setup": "Manual: /add-plugin pstack on Cursor Desktop",
+      "tier": "S",
+      "note": "Desktop plugin; poteto-mode patterns"
     },
     {
       "name": "specify-cli",
       "setup": "uv tool install specify-cli --from git+https://github.com/github/spec-kit.git",
       "tier": "S"
+    },
+    {
+      "name": "openspec",
+      "setup": "npm install -g @fission-ai/openspec && openspec init --tools cursor",
+      "tier": "S",
+      "note": "Spec-driven changes; /opsx-propose etc."
+    },
+    {
+      "name": "graphify",
+      "setup": "uv tool install graphifyy && graphify cursor install",
+      "tier": "A",
+      "note": "Code knowledge graph; /graphify"
+    },
+    {
+      "name": "impeccable",
+      "setup": "npx impeccable skills install (project) + symlink to ~/.agents/skills",
+      "tier": "A",
+      "note": "/impeccable init for design context"
+    },
+    {
+      "name": "context7",
+      "setup": "Add to ~/.cursor/mcp.json — npx @upstash/context7-mcp",
+      "tier": "S",
+      "note": "Up-to-date library docs MCP; set CONTEXT7_API_KEY"
+    },
+    {
+      "name": "serena",
+      "setup": "MCP: uvx --from git+https://github.com/oraios/serena serena-mcp-server",
+      "tier": "A",
+      "note": "Semantic code retrieval MCP; desktop/manual OAuth"
+    },
+    {
+      "name": "openai-plugins",
+      "setup": "Reference only — openai/skills deprecated; use anthropics/skills",
+      "tier": "B",
+      "note": "Legacy OpenAI plugin format; document only"
     }
   ]
 }

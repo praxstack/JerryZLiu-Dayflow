@@ -1,56 +1,75 @@
-# Super-Pro AI Developer Stack
+# PraxStack — Super-Pro AI Developer Stack
 
 **Owner:** Prax  
-**Repository:** [praxstack/jerryzliu-dayflow](https://github.com/praxstack/jerryzliu-dayflow)  
+**Repository:** [praxstack/JerryZLiu-Dayflow](https://github.com/praxstack/JerryZLiu-Dayflow)  
 **Last updated:** 2026-08-29
 
-This document describes the recommended agent skill stack for Dayflow Cloud Agents and local Cursor development. Skills install **globally** to `~/.agents/skills` (not into the repo) to avoid bloating the application tree.
+PraxStack is the expanded 2026 agent skill ecosystem for Dayflow Cloud Agents and local Cursor development. Skills install **globally** to `~/.agents/skills` (Cloud Agent discovery path — **not** only `~/.cursor/skills`).
 
 ---
 
 ## Quick start
 
 ```bash
-# Install all recommended packs (idempotent, non-interactive)
+# Full PraxStack (super-pro + extensions: OpenSpec, Graphify, Stitch, etc.)
+bash scripts/install-praxstack-skills.sh --with-tools
+
+# Base super-pro only
 bash scripts/install-super-pro-skills.sh
 
-# Verify key skills and tools
+# gstack only (clone + setup + ~/.agents/skills symlinks)
+bash scripts/install-gstack-skills.sh
+
+# Verify key skills, slash commands, and tools
 bash scripts/verify-super-pro-skills.sh
 ```
 
-**Sync / lock file:** Global installs are tracked in `~/.agents/.skill-lock.json` (skills CLI v3). The repo manifest at `.agents/super-pro-packs.json` lists every pack and install mode; re-run the install script to restore on a fresh VM.
+**Sync / lock file:** `~/.agents/.skill-lock.json` (skills CLI v3). Manifest: `.agents/super-pro-packs.json`. Re-run install on fresh VMs.
 
-**Cloud Agent VM:** Skills are **user-level**, not part of the Swift/dayflow-cli VM install phase. Run `install-super-pro-skills.sh` once per agent user after the environment boots (or bake into a custom environment snapshot).
+**Cloud Agent VM:** Skills are user-level. Run `install-praxstack-skills.sh` once per agent user after boot (or bake into environment snapshot).
 
 ---
 
-## 10-Layer Architecture
+## PraxStack architecture (2026)
 
-| Layer | Purpose | Primary tools/skills |
-|-------|---------|---------------------|
-| 1. **Discover** | Find the right skill for the job | `find-skills`, `npx skills find`, gstack `skillify` |
-| 2. **Spec** | Formalize requirements before coding | `specify` (Spec Kit), gstack `spec`, `ce-plan`, `writing-plans` |
-| 3. **Interrogate** | Clarify scope, risks, and constraints | superpowers `brainstorming`, `ce-brainstorm`, `karpathy-guidelines` |
-| 4. **Plan** | Structured implementation plans | `executing-plans`, `subagent-driven-development`, `ce-plan`, gstack `autoplan` |
-| 5. **Implement** | Write code with discipline | superpowers `test-driven-development`, pstack `poteto-mode`, mattpocock, vercel-labs, `tdd` (dot-skills), `red-green-refactor` |
-| 6. **Review** | Code review and quality gates | mattpocock `code-review`, `ce-code-review`, trailofbits `differential-review`, gstack `review`, jwynia `security-scan` |
-| 7. **Security** | Security analysis and hardening | trailofbits pack, jwynia `config-scan`/`dependency-scan`/`security-scan` |
-| 8. **Browser QA** | Visual and E2E verification | `agent-browser`, `ce-test-browser`, gstack `qa`/`browse`, anthropics `webapp-testing` |
-| 9. **Ship** | Commit, PR, deploy | `ce-commit-push-pr`, gstack `ship`/`land-and-deploy`, `finishing-a-development-branch` |
-| 10. **Learn** | Compound knowledge over time | `ce-compound`, gstack `learn`, `continual-learning` |
+PraxStack layers **discover → spec → plan → implement → review → security → QA → ship → learn**, with MCP tools (Context7, Serena) and CLIs (OpenSpec, Graphify, specify) at the edges.
 
-### Layer diagram
+| Layer | Purpose | PraxStack tools/skills |
+|-------|---------|------------------------|
+| 1. **Discover** | Find skills, trends, docs | `find-skills`, `last30days`, `deep-research`, Context7 MCP, `nvidia-skill-finder` |
+| 2. **Spec** | Formalize before coding | OpenSpec (`/opsx-propose`), `specify` (Spec Kit), gstack `spec`, `ce-plan` |
+| 3. **Interrogate** | Clarify scope and risks | superpowers `brainstorming`, `karpathy-guidelines`, gstack `plan-ceo-review` |
+| 4. **Plan** | Structured plans | `executing-plans`, gstack `autoplan`, wshobson `architecture-patterns` |
+| 5. **Implement** | Disciplined coding | superpowers TDD, mattpocock, `improve`, Stitch, Remotion, `impeccable` |
+| 6. **Review** | Quality gates | `code-review`, `ce-code-review`, gstack `review`, `web-design-guidelines` |
+| 7. **Security** | Hardening | trailofbits, jwynia scans, wshobson `auth-implementation-patterns` |
+| 8. **Browser QA** | Visual/E2E | `agent-browser`, gstack `qa`/`browse`, `hallmark` |
+| 9. **Ship** | PR/deploy | gstack `ship`, `ce-commit-push-pr`, OpenSpec archive |
+| 10. **Learn** | Compound knowledge | `ce-compound`, gstack `learn`, `continual-learning` |
+
+### Discovery paths
+
+| Path | Used by | Notes |
+|------|---------|-------|
+| `~/.agents/skills/` | **Cloud Agents** | Primary — install scripts symlink here |
+| `~/.cursor/skills/` | Cursor Desktop, gstack setup | gstack writes `gstack-*` dirs here |
+| `.cursor/skills/` (repo) | OpenSpec project skills | Linked to `~/.agents/skills` by install script |
+
+---
+
+## 10-Layer diagram
 
 ```
 ┌─────────────┐     ┌─────────────┐     ┌──────────────┐
 │  Discover   │────▶│    Spec     │────▶│ Interrogate  │
-│ find-skills │     │ specify/ce  │     │ brainstorm   │
+│ find-skills │     │ openspec    │     │ brainstorm   │
+│ last30days  │     │ specify     │     │ plan-ceo     │
 └─────────────┘     └─────────────┘     └──────────────┘
        │                                        │
        ▼                                        ▼
 ┌─────────────┐     ┌─────────────┐     ┌──────────────┐
 │    Plan     │────▶│ Implement   │────▶│   Review     │
-│ ce-plan     │     │ TDD/poteto  │     │ code-review  │
+│ ce-plan     │     │ improve/TDD │     │ code-review  │
 └─────────────┘     └─────────────┘     └──────────────┘
        │                   │                    │
        ▼                   ▼                    ▼
@@ -62,77 +81,119 @@ bash scripts/verify-super-pro-skills.sh
 
 ---
 
-## Core 10 Systems
+## Core systems
 
-| # | System | Role | Install location |
-|---|--------|------|------------------|
-| 1 | **Skills CLI** | Universal skill installer (`npx skills@latest`) | npm (npx) |
-| 2 | **find-skills** | Meta-skill for discovering skills on demand | `~/.agents/skills/find-skills` |
-| 3 | **gstack** | Full dev lifecycle (spec→plan→review→QA→ship→learn) | `~/gstack` + `~/.cursor/skills` |
-| 4 | **superpowers** (obra) | Disciplined dev workflows (TDD, debugging, plans) | `~/.agents/skills` |
-| 5 | **Compound Engineering** | End-to-end product engineering loop | `~/.agents/skills/ce-*` |
-| 6 | **trailofbits/skills** | Security, fuzzing, static analysis | `~/.agents/skills` |
-| 7 | **agent-browser** | Headless browser automation for agents | `~/.npm-global/bin/agent-browser` |
-| 8 | **Spec Kit (specify-cli)** | Spec-driven development CLI | `~/.local/bin/specify` |
-| 9 | **pstack** | Poteto-mode engineering patterns | `~/.agents/skills` |
-| 10 | **awesome-copilot** | Broad Microsoft/GitHub engineering skills | `~/.agents/skills` |
+| # | System | Role | Install |
+|---|--------|------|---------|
+| 1 | **Skills CLI** | Universal installer | `npx skills@latest` |
+| 2 | **find-skills** | Meta-discovery | `~/.agents/skills/find-skills` |
+| 3 | **gstack** | Full dev lifecycle | `~/gstack` + symlinks |
+| 4 | **superpowers** | Workflow discipline | `~/.agents/skills` |
+| 5 | **Compound Engineering** | Product loop | `~/.agents/skills/ce-*` |
+| 6 | **trailofbits/skills** | Security analysis | `~/.agents/skills` |
+| 7 | **agent-browser** | Headless browser | npm global |
+| 8 | **Spec Kit (specify-cli)** | Spec-driven CLI | `uv tool install specify-cli` |
+| 9 | **OpenSpec** | Change proposals | `npm i -g @fission-ai/openspec` |
+| 10 | **Context7** | Live library docs MCP | `~/.cursor/mcp.json` |
+| 11 | **Graphify** | Code knowledge graph | `uv tool install graphifyy` |
+| 12 | **pstack** | Poteto-mode (Desktop) | `/add-plugin pstack` |
 
 ---
 
-## Skill packs (full list)
+## PraxStack extension packs (2026)
+
+| Pack | Mode | Notes |
+|------|------|-------|
+| `mvanhorn/last30days-skill` | selective | `last30days` — recent trends research |
+| `24601/agent-deep-research` | selective | `deep-research` |
+| `nutlope/hallmark` | selective | `hallmark` — landing page QA |
+| `vercel-labs/agent-skills` | selective | `web-design-guidelines` (rules from web-interface-guidelines repo) |
+| `google-labs-code/stitch-skills` | selective | Stitch design→code (3 skills) |
+| `remotion-dev/skills` | full | Video/remotion workflows |
+| `wshobson/agents` | **selective (14)** | Do **not** install all 181 |
+| `nvidia/skills` | **selective (8)** | GPU/AI infra on demand |
+| **OpenSpec** | CLI + repo | `/opsx-propose`, `.cursor/skills/openspec-*` |
+| **Graphify** | uv tool | `/graphify` — knowledge graph |
+| **Impeccable** | npx | `/impeccable` — design context |
+| **Context7** | MCP | `@upstash/context7-mcp` in mcp.json |
+| **Serena** | MCP (manual) | `uvx --from git+https://github.com/oraios/serena serena-mcp-server` |
+
+### wshobson/agents — selective (14 installed)
+
+`api-design-principles`, `architecture-patterns`, `architecture-decision-records`, `code-review-excellence`, `context-driven-development`, `microservices-patterns`, `auth-implementation-patterns`, `accessibility-compliance`, `before-you-build`, `hads`, `cqrs-implementation`, `bash-defensive-patterns`, `event-store-design`, `projection-patterns`
+
+### nvidia/skills — selective (8 installed)
+
+`nvidia-skill-finder`, `cudaq-guide`, `jetson-quick-start`, `deepstream-dev`, `nemo-rl-docs`, `physicsnemo-discover`, `dynamo-troubleshoot`, `rag-blueprint`
+
+---
+
+## Super-pro base packs
 
 | Pack | Mode | Skills | Notes |
 |------|------|--------|-------|
 | `vercel-labs/skills` | selective | `find-skills` | Install first |
-| `trailofbits/skills` | full | 80 | Security; on-demand |
+| `trailofbits/skills` | full | 80 | Security |
 | `vercel-labs/agent-browser` | selective | `agent-browser` | + npm global CLI |
-| `anthropics/skills` | full | 17 | Use subset on demand |
-| `github/awesome-copilot` | full | 415 | Invoke on demand |
+| `anthropics/skills` | full | 17 | Subset on demand |
+| `github/awesome-copilot` | full | 415 | On demand |
 | `microsoft/skills` | selective | 8 | Avoid context rot |
 | `EveryInc/compound-engineering-plugin` | full | 34 | Product loop |
 | `shadcn/improve` | selective | `improve` | UI polish |
 | `mattpocock/skills` | full | 37 | TypeScript/React |
 | `obra/superpowers` | full | 13 | Workflow discipline |
 | `addyosmani/agent-skills` | full | 25 | General patterns |
-| `vercel-labs/agent-skills` | full | 9 | Vercel/Next.js |
-| `supabase/agent-skills` | full | 2 | Postgres/Supabase |
-| `cloudflare/skills` | full | 13 | Workers/Wrangler |
-| `aws/agent-toolkit-for-aws` | selective | 6 | Billing, security, serverless, etc. |
+| `vercel-labs/agent-skills` | full | 9+ | Vercel/Next.js |
+| `supabase/agent-skills` | full | 2 | Optional |
+| `cloudflare/skills` | full | 13 | Optional |
+| `aws/agent-toolkit-for-aws` | selective | 6 | Optional |
 | `forrestchang/andrej-karpathy-skills` | full | 1 | `karpathy-guidelines` |
-| `brainqub3/red-green-refactor` | full | 6 | TDD workflow variants |
-| `jwynia/agent-skills` | selective | 3 | `security-scan`, `dependency-scan`, `config-scan` |
-| `pproenca/dot-skills` | selective | `tdd` | Red-green-refactor methodology |
-| **gstack** | script | 54 | `./setup --host cursor` in `~/gstack` |
-| **pstack** | manual copy | 7 | poteto-mode, setup-pstack, etc. |
-| **specify-cli** | uv tool | — | `uv tool install specify-cli` |
+| `brainqub3/red-green-refactor` | full | 6 | TDD variants |
+| `jwynia/agent-skills` | selective | 3 | Security scans |
+| `pproenca/dot-skills` | selective | `tdd` | Methodology |
+| **gstack** | script | 54 | `./setup --host cursor` |
+| **pstack** | Desktop | 7 | `/add-plugin pstack` |
+| **specify-cli** | uv tool | — | Spec Kit |
 
 ### microsoft/skills — selective (8 installed, 5 skipped)
 
 **Installed:** `continual-learning`, `frontend-design-review`, `github-issue-creator`, `mcp-builder`, `skill-creator`, `copilot-sdk`, `microsoft-docs`, `cloud-solution-architect`
 
-**Skipped (Azure/Windows-specific):** `applicationinsights-web-ts`, `debugview`, `entra-agent-id`, `kql`, `podcast-generation`
+**Skipped:** `applicationinsights-web-ts`, `debugview`, `entra-agent-id`, `kql`, `podcast-generation`
 
-### jwynia note
+### openai/skills — deprecated
 
-The research listed `jwynia/agent-skills` → `code-review`, but that skill does not exist in the repo. We install `security-scan`, `dependency-scan`, and `config-scan` instead for review-adjacent workflows.
+OpenAI's standalone skills repo is deprecated. Use `anthropics/skills` and reference [openai/plugins](https://github.com/openai/plugins) for legacy plugin format only.
 
 ---
 
-## Overlap warnings
+## Key slash commands
 
-| Domain | Overlapping skills | Recommendation |
-|--------|-------------------|----------------|
-| **TDD** | superpowers `test-driven-development`, `tdd` (dot-skills), `red-green-refactor`, trailofbits property/mutation testing | Default: superpowers TDD. Use `red-green-refactor` for CI harness workflows. |
-| **Code review** | mattpocock `code-review`, `ce-code-review`, trailofbits `differential-review`, gstack `review` | Default: mattpocock for TS/React. trailofbits for security diffs. |
-| **Planning** | superpowers `writing-plans`, `ce-plan`, gstack `autoplan` | superpowers for small tasks; ce-plan/gstack for features. |
-| **Browser QA** | agent-browser, `ce-test-browser`, gstack `qa`, anthropics `webapp-testing` | agent-browser for CLI; gstack qa for full workflow. |
-| **MCP building** | anthropics `mcp-builder`, microsoft `mcp-builder` | Either; microsoft is Azure-aware. |
+After install, these workflows are available via `/command`:
+
+| Command | Source | Purpose |
+|---------|--------|---------|
+| `/plan-ceo-review` | gstack | CEO-level plan review |
+| `/find-skills` | vercel-labs | Discover skills |
+| `/improve` | shadcn | UI polish |
+| `/office-hours` | gstack | Design consultation |
+| `/review` | gstack | Code review workflow |
+| `/qa` | gstack | Browser QA |
+| `/ship` | gstack | Commit/PR/deploy |
+| `/opsx-propose` | OpenSpec | Propose a change |
+| `/impeccable` | impeccable | Design context |
+| `/last30days` | last30days | Recent trends research |
+| `/deep-research` | agent-deep-research | Deep research |
+| `/hallmark` | hallmark | Landing page audit |
+| `/web-design-guidelines` | vercel | UI/accessibility audit |
+
+gstack also provides `/spec`, `/autoplan`, `/learn`, `/browse`, and 40+ more (see `~/gstack`).
 
 ---
 
 ## Desktop-only steps (Cursor IDE)
 
-These plugins require Cursor Desktop and cannot be fully activated on Cloud Agent VM:
+Cannot be fully activated on Cloud Agent VM:
 
 ```
 /add-plugin pstack
@@ -140,21 +201,44 @@ These plugins require Cursor Desktop and cannot be fully activated on Cloud Agen
 /add-plugin compound-engineering
 ```
 
-The VM has skill *files* installed globally; Desktop plugins wire them into the IDE UI.
+VM has skill *files* in `~/.agents/skills`; Desktop plugins wire IDE UI.
+
+### Serena MCP (manual)
+
+Add to `~/.cursor/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "serena": {
+      "command": "uvx",
+      "args": ["--from", "git+https://github.com/oraios/serena", "serena-mcp-server"]
+    }
+  }
+}
+```
+
+### Context7 API key
+
+For authenticated Context7 access, set `CONTEXT7_API_KEY` or add to mcp.json env:
+
+```json
+"context7": {
+  "command": "npx",
+  "args": ["-y", "@upstash/context7-mcp@latest"],
+  "env": { "CONTEXT7_API_KEY": "${CONTEXT7_API_KEY}" }
+}
+```
 
 ---
 
 ## gstack setup
 
-gstack installs via its own setup script (not the skills CLI). For Cloud Agents, skills must exist in **both** `~/.cursor/skills` and `~/.agents/skills`:
-
 ```bash
 bash scripts/install-gstack-skills.sh
 ```
 
-This clones [garrytan/gstack](https://github.com/garrytan/gstack), runs `./setup --host cursor`, and symlinks each skill into `~/.agents/skills` using the short name from `SKILL.md` (e.g. `plan-ceo-review` → `/plan-ceo-review`).
-
-Result: ~54 skills. Use slash commands like `/plan-ceo-review`, `/office-hours`, `/review`, `/qa`, `/ship`.
+Clones [garrytan/gstack](https://github.com/garrytan/gstack), runs `./setup --host cursor`, symlinks short names into `~/.agents/skills` (e.g. `plan-ceo-review` from `gstack-plan-ceo-review`).
 
 ---
 
@@ -162,14 +246,15 @@ Result: ~54 skills. Use slash commands like `/plan-ceo-review`, `/office-hours`,
 
 | Tool | Path |
 |------|------|
-| Node.js (nvm) | v22+ |
-| Skills CLI | `npx --yes skills@latest` |
+| Node.js | v22+ |
+| Skills CLI | `npx skills@latest` |
 | agent-browser | `~/.npm-global/bin/agent-browser` |
 | specify-cli | `~/.local/bin/specify` |
+| openspec | `~/.npm-global/bin/openspec` |
+| graphify | `~/.local/bin/graphify` |
 | uv | `~/.local/bin/uv` |
-| Chrome (agent-browser) | `~/.agent-browser/browsers/` |
 
-**PATH** (add to `~/.bashrc`):
+**PATH:**
 
 ```bash
 export PATH="$HOME/.local/bin:$HOME/.npm-global/bin:$HOME/.bun/bin:$PATH"
@@ -177,13 +262,26 @@ export PATH="$HOME/.local/bin:$HOME/.npm-global/bin:$HOME/.bun/bin:$PATH"
 
 ---
 
-## Optional flags (install script)
+## Install script flags
 
 ```bash
-bash scripts/install-super-pro-skills.sh                   # Full stack (AWS selective included)
-bash scripts/install-super-pro-skills.sh --skip-optional   # Core packs only (no supabase/cloudflare/aws)
-bash scripts/install-super-pro-skills.sh --no-aws          # Skip AWS selective pack only
-bash scripts/install-super-pro-skills.sh --no-gstack        # Skip gstack (included by default)
+bash scripts/install-praxstack-skills.sh                    # Full PraxStack
+bash scripts/install-praxstack-skills.sh --with-tools       # + agent-browser, specify, openspec, graphify
+bash scripts/install-praxstack-skills.sh --skip-super-pro   # Extensions only
+bash scripts/install-praxstack-skills.sh --skip-optional    # Skip cloud/vendor optional packs
+bash scripts/install-praxstack-skills.sh --no-gstack        # Skip gstack
+bash scripts/install-super-pro-skills.sh                    # Base stack only
 bash scripts/install-gstack-skills.sh                       # gstack only
-bash scripts/install-super-pro-skills.sh --with-tools      # agent-browser + specify-cli
 ```
+
+---
+
+## Overlap warnings
+
+| Domain | Overlapping skills | Recommendation |
+|--------|-------------------|----------------|
+| **TDD** | superpowers TDD, `tdd`, `red-green-refactor` | Default: superpowers |
+| **Code review** | mattpocock, `ce-code-review`, gstack `review` | mattpocock for TS; trailofbits for security |
+| **Planning** | superpowers, `ce-plan`, gstack `autoplan` | superpowers small; ce/gstack features |
+| **UI audit** | `improve`, `web-design-guidelines`, `hallmark` | improve polish; web-design-guidelines audit |
+| **Spec** | OpenSpec, specify, gstack `spec` | OpenSpec for changes; specify for greenfield |

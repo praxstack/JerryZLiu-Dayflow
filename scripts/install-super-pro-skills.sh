@@ -8,7 +8,8 @@
 # Options:
 #   --skip-optional   Skip cloud/vendor packs (supabase, cloudflare, aws)
 #   --no-aws          Skip AWS selective pack
-#   --with-gstack     Clone and run gstack setup
+#   --with-gstack     Clone/setup gstack and link into ~/.agents/skills (default: on)
+#   --no-gstack       Skip gstack install
 #   --with-tools      Install agent-browser CLI and specify-cli
 #   -h, --help        Show help
 
@@ -18,7 +19,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 SKIP_OPTIONAL=false
 WITH_AWS=true
-WITH_GSTACK=false
+WITH_GSTACK=true
 WITH_TOOLS=false
 
 SKILLS=(npx --yes skills@latest add)
@@ -33,6 +34,7 @@ while [[ $# -gt 0 ]]; do
     --skip-optional) SKIP_OPTIONAL=true; WITH_AWS=false ;;
     --no-aws) WITH_AWS=false ;;
     --with-gstack) WITH_GSTACK=true ;;
+    --no-gstack) WITH_GSTACK=false ;;
     --with-tools) WITH_TOOLS=true ;;
     -h|--help) usage 0 ;;
     *) echo "Unknown option: $1" >&2; usage 1 ;;
@@ -93,14 +95,7 @@ install_tools() {
 }
 
 install_gstack() {
-  if [[ -d "${HOME}/gstack" ]]; then
-    log "gstack directory exists; running setup ..."
-    (cd "${HOME}/gstack" && ./setup --host cursor)
-  else
-    log "Cloning gstack ..."
-    git clone https://github.com/gstack/gstack.git "${HOME}/gstack"
-    (cd "${HOME}/gstack" && ./setup --host cursor)
-  fi
+  bash "${ROOT}/scripts/install-gstack-skills.sh"
 }
 
 main() {

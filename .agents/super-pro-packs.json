@@ -144,7 +144,7 @@
   "external": [
     {
       "name": "gstack",
-      "setup": "git clone https://github.com/gstack/gstack.git ~/gstack && cd ~/gstack && ./setup --host cursor",
+      "setup": "bash scripts/install-gstack-skills.sh",
       "tier": "S"
     },
     {

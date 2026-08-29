@@ -58,6 +58,11 @@ check_skill supabase
 check_skill cloudflare
 check_skill aws-security
 
+echo "[verify-super-pro] Checking gstack skills ..."
+check_skill plan-ceo-review
+check_skill office-hours
+check_skill review
+
 echo "[verify-super-pro] Checking tools (optional) ..."
 if command -v agent-browser >/dev/null 2>&1; then
   ok "agent-browser CLI"

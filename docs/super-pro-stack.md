@@ -146,12 +146,15 @@ The VM has skill *files* installed globally; Desktop plugins wire them into the 
 
 ## gstack setup
 
+gstack installs via its own setup script (not the skills CLI). For Cloud Agents, skills must exist in **both** `~/.cursor/skills` and `~/.agents/skills`:
+
 ```bash
-git clone https://github.com/gstack/gstack.git ~/gstack
-cd ~/gstack && ./setup --host cursor
+bash scripts/install-gstack-skills.sh
 ```
 
-Result: ~54 skills in `~/.cursor/skills`. See [gstack#2361](https://github.com/gstack/gstack/issues/2361) for Cursor integration notes.
+This clones [garrytan/gstack](https://github.com/garrytan/gstack), runs `./setup --host cursor`, and symlinks each skill into `~/.agents/skills` using the short name from `SKILL.md` (e.g. `plan-ceo-review` → `/plan-ceo-review`).
+
+Result: ~54 skills. Use slash commands like `/plan-ceo-review`, `/office-hours`, `/review`, `/qa`, `/ship`.
 
 ---
 
@@ -180,6 +183,7 @@ export PATH="$HOME/.local/bin:$HOME/.npm-global/bin:$HOME/.bun/bin:$PATH"
 bash scripts/install-super-pro-skills.sh                   # Full stack (AWS selective included)
 bash scripts/install-super-pro-skills.sh --skip-optional   # Core packs only (no supabase/cloudflare/aws)
 bash scripts/install-super-pro-skills.sh --no-aws          # Skip AWS selective pack only
-bash scripts/install-super-pro-skills.sh --with-gstack     # Clone/setup gstack
+bash scripts/install-super-pro-skills.sh --no-gstack        # Skip gstack (included by default)
+bash scripts/install-gstack-skills.sh                       # gstack only
 bash scripts/install-super-pro-skills.sh --with-tools      # agent-browser + specify-cli
 ```

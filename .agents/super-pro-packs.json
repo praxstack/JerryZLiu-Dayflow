@@ -1,0 +1,161 @@
+{
+  "version": 1,
+  "description": "Manifest of super-pro skill packs for Dayflow Cloud Agents. Installs are global (-g) to ~/.agents/skills. Sync state: ~/.agents/.skill-lock.json",
+  "installCommand": "bash scripts/install-super-pro-skills.sh",
+  "packs": [
+    {
+      "repo": "vercel-labs/skills",
+      "skills": ["find-skills"],
+      "tier": "S",
+      "layer": "discover"
+    },
+    {
+      "repo": "trailofbits/skills",
+      "skills": ["*"],
+      "tier": "S",
+      "layer": "security"
+    },
+    {
+      "repo": "vercel-labs/agent-browser",
+      "skills": ["agent-browser"],
+      "tier": "S",
+      "layer": "browser-qa",
+      "requires": ["npm install -g agent-browser && agent-browser install"]
+    },
+    {
+      "repo": "anthropics/skills",
+      "skills": ["*"],
+      "tier": "S",
+      "layer": "implement",
+      "note": "Use subset on demand"
+    },
+    {
+      "repo": "github/awesome-copilot",
+      "skills": ["*"],
+      "tier": "S",
+      "layer": "all",
+      "note": "Invoke on demand to avoid context rot"
+    },
+    {
+      "repo": "microsoft/skills",
+      "skills": [
+        "continual-learning",
+        "frontend-design-review",
+        "github-issue-creator",
+        "mcp-builder",
+        "skill-creator",
+        "copilot-sdk",
+        "microsoft-docs",
+        "cloud-solution-architect"
+      ],
+      "tier": "A",
+      "layer": "learn"
+    },
+    {
+      "repo": "EveryInc/compound-engineering-plugin",
+      "skills": ["*"],
+      "tier": "S",
+      "layer": "all"
+    },
+    {
+      "repo": "shadcn/improve",
+      "skills": ["improve"],
+      "tier": "A",
+      "layer": "implement"
+    },
+    {
+      "repo": "mattpocock/skills",
+      "skills": ["*"],
+      "tier": "S",
+      "layer": "implement"
+    },
+    {
+      "repo": "obra/superpowers",
+      "skills": ["*"],
+      "tier": "S",
+      "layer": "plan"
+    },
+    {
+      "repo": "addyosmani/agent-skills",
+      "skills": ["*"],
+      "tier": "A",
+      "layer": "implement"
+    },
+    {
+      "repo": "vercel-labs/agent-skills",
+      "skills": ["*"],
+      "tier": "S",
+      "layer": "implement"
+    },
+    {
+      "repo": "supabase/agent-skills",
+      "skills": ["*"],
+      "tier": "A",
+      "layer": "implement",
+      "optional": true
+    },
+    {
+      "repo": "cloudflare/skills",
+      "skills": ["*"],
+      "tier": "A",
+      "layer": "ship",
+      "optional": true
+    },
+    {
+      "repo": "aws/agent-toolkit-for-aws",
+      "skills": [
+        "aws-billing-and-cost-management",
+        "aws-security",
+        "aws-serverless",
+        "aws-observability",
+        "aws-iam",
+        "aws-cdk"
+      ],
+      "tier": "A",
+      "layer": "ship",
+      "optional": true
+    },
+    {
+      "repo": "forrestchang/andrej-karpathy-skills",
+      "skills": ["*"],
+      "tier": "A",
+      "layer": "interrogate"
+    },
+    {
+      "repo": "brainqub3/red-green-refactor",
+      "skills": ["*"],
+      "tier": "A",
+      "layer": "implement"
+    },
+    {
+      "repo": "jwynia/agent-skills",
+      "skills": ["security-scan", "dependency-scan", "config-scan"],
+      "tier": "A",
+      "layer": "security",
+      "note": "code-review skill not in repo; security scans substituted"
+    },
+    {
+      "repo": "pproenca/dot-skills",
+      "skills": ["tdd"],
+      "tier": "A",
+      "layer": "implement"
+    }
+  ],
+  "external": [
+    {
+      "name": "gstack",
+      "setup": "git clone https://github.com/gstack/gstack.git ~/gstack && cd ~/gstack && ./setup --host cursor",
+      "tier": "S"
+    },
+    {
+      "name": "pstack",
+      "setup": "Manual copy or /add-plugin pstack on Desktop",
+      "tier": "S"
+    },
+    {
+      "name": "specify-cli",
+      "setup": "uv tool install specify-cli --from git+https://github.com/github/spec-kit.git",
+      "tier": "S"
+    }
+  ]
+}

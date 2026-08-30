@@ -5,7 +5,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DB_PATH="${1:-$ROOT/chunks.sqlite}"
 
-rm -f "$DB_PATH"
+rm -f "$DB_PATH" "${DB_PATH}-wal" "${DB_PATH}-shm"
 sqlite3 "$DB_PATH" <<'SQL'
 PRAGMA journal_mode = WAL;
 

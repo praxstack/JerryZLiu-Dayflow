@@ -66,7 +66,7 @@ if [[ "${SKIP_OPTIONAL}" != true ]]; then
   check_skill cloudflare
   check_skill aws-security
 else
-  echo "[verify-praxstack] Skipping optional cloud packs (--skip-optional)"
+  echo "[verify-praxstack] Skipping optional cloud/vendor packs (--skip-optional)"
 fi
 
 echo "[verify-praxstack] Checking Prax personal workflow (skills-and-personas) ..."

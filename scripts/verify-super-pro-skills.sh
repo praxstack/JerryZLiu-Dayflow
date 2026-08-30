@@ -2,9 +2,16 @@
 # Verify the PraxStack / super-pro agent skill stack is installed globally.
 # Exit 0 if all checks pass; exit 1 on any failure.
 #
-# Usage: bash scripts/verify-super-pro-skills.sh
+# Usage: bash scripts/verify-super-pro-skills.sh [--skip-optional]
 
 set -euo pipefail
+
+SKIP_OPTIONAL=false
+for arg in "$@"; do
+  case "$arg" in
+    --skip-optional) SKIP_OPTIONAL=true ;;
+  esac
+done
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 export PATH="${HOME}/.local/bin:${HOME}/.npm-global/bin:${PATH}"
@@ -54,9 +61,13 @@ check_skill karpathy-guidelines
 check_skill red-green-refactor
 check_skill tdd
 check_skill security-scan
-check_skill supabase
-check_skill cloudflare
-check_skill aws-security
+if [[ "${SKIP_OPTIONAL}" != true ]]; then
+  check_skill supabase
+  check_skill cloudflare
+  check_skill aws-security
+else
+  echo "[verify-praxstack] Skipping optional cloud packs (--skip-optional)"
+fi
 
 echo "[verify-praxstack] Checking Prax personal workflow (skills-and-personas) ..."
 PRAXSTACK_SKILLS=(

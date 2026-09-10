@@ -16,6 +16,7 @@ This document lists manual events, properties, and code locations. All events re
   - props: `from_version: string`, `to_version: string`
   - file: App/AppDelegate.swift
 - app_heartbeat
+  - appearance props: `appearance: system|light|dark` (saved preference, defaults to system), `effective_appearance: light|dark` (resolved at each heartbeat, including forced light during onboarding). Sent on startup and hourly; use each person's latest heartbeat for a user split rather than counting events.
   - props: `session_hours: number`, `cpu_current_pct_bucket?: 0-5%|5-20%|20-50%|50-100%|100-150%|150-200%|>200%`, `cpu_avg_pct_bucket?: 0-5%|5-20%|20-50%|50-100%|100-150%|150-200%|>200%`, `cpu_peak_pct_bucket?: 0-5%|5-20%|20-50%|50-100%|100-150%|150-200%|>200%`, `cpu_sample_count?: int`, `cpu_sampler_interval_s?: int`, `current_tab?: timeline|daily|weekly|dashboard|journal|bug_report|settings`, `timeline_mode?: day|week`
   - file: App/AppDelegate.swift
 - app_cpu_spike
@@ -93,10 +94,10 @@ This document lists manual events, properties, and code locations. All events re
 - agentplayback_launch_started
   - props: `mode: latest|cached_fallback`
 - agentplayback_launch_completed
-  - props: `mode: latest|cached_fallback`, `outcome: success|failure`, `duration_seconds: number`, `agentplayback_version?: string`, `failure_category?: preparation|process_launch|process_exit|missing_runtime|timeout|navigation|web_content_terminated`, `will_try_fallback?: bool`
+  - props: `mode: latest|cached_fallback`, `outcome: success|failure`, `duration_seconds: number`, `agentplayback_version?: string`, `failure_category?: preparation|process_launch|process_exit|missing_runtime|timeout|navigation|web_content_terminated`, `will_try_fallback?: bool`, failure diagnostics: `startup_stage`, `output_character_count`, `login_shell`, `termination_status?`, `termination_reason?`
   - one result per launch attempt; success means WebKit finished loading the dashboard, not that every historical scan finished; a recovered failure and fallback success remain separate attempts
 - agentplayback_runtime_failed
-  - props: `mode: latest|cached_fallback`, `agentplayback_version?: string`, `failure_category: preparation|process_launch|process_exit|missing_runtime|timeout|navigation|web_content_terminated`, `will_try_fallback: bool`
+  - props: `mode: latest|cached_fallback`, `agentplayback_version?: string`, `failure_category: preparation|process_launch|process_exit|missing_runtime|timeout|navigation|web_content_terminated`, `will_try_fallback: bool`, `startup_stage`, `output_character_count`, `login_shell`, `termination_status?`, `termination_reason?`
   - failures after the initial page load, separate from startup failures
 - agentplayback_retry_clicked
   - explicit click on Try again

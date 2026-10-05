@@ -7,7 +7,11 @@
 //  the Dayflow app uploads those records later only when analytics is enabled.
 //
 
+#if canImport(Darwin)
 import Darwin
+#else
+import Glibc
+#endif
 import Foundation
 
 private struct AgentUsageRecord: Encodable {
@@ -202,7 +206,7 @@ enum AgentUsageTelemetry {
       return
     }
 
-    let lockFD = Darwin.open(lockURL.path, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR)
+    let lockFD = open(lockURL.path, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR)
     guard lockFD >= 0 else { return }
     fchmod(lockFD, S_IRUSR | S_IWUSR)
     defer {
@@ -214,7 +218,7 @@ enum AgentUsageTelemetry {
     let existingSize = (try? queueURL.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
     guard Int64(existingSize) + Int64(data.count) <= maximumQueueBytes else { return }
 
-    let queueFD = Darwin.open(
+    let queueFD = open(
       queueURL.path,
       O_CREAT | O_APPEND | O_WRONLY,
       S_IRUSR | S_IWUSR
@@ -227,7 +231,7 @@ enum AgentUsageTelemetry {
       guard let baseAddress = bytes.baseAddress else { return }
       var written = 0
       while written < bytes.count {
-        let result = Darwin.write(
+        let result = write(
           queueFD,
           baseAddress.advanced(by: written),
           bytes.count - written

@@ -1,0 +1,33 @@
+name: dayflow-cli
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "tools/dayflow-cli/**"
+      - ".github/workflows/cli.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "tools/dayflow-cli/**"
+      - ".github/workflows/cli.yml"
+
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: "6.0.3"
+      - name: Install SQLite
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libsqlite3-dev sqlite3
+      - name: Swift tests
+        run: swift test --package-path tools/dayflow-cli
+      - name: Build CLI
+        run: swift build --package-path tools/dayflow-cli
+      - name: Fixture + subprocess tests
+        run: |
+          bash tools/dayflow-cli/fixtures/create_fixture_db.sh
+          DAYFLOW_BIN="$(swift build --package-path tools/dayflow-cli --show-bin-path)/dayflow" \
+            python3 tools/dayflow-cli/tests/test_cli.py

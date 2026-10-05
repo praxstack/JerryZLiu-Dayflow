@@ -12,6 +12,7 @@
 //
 
 import Foundation
+import DayflowCLICore
 
 private let mcpProtocolVersion = "2025-06-18"
 

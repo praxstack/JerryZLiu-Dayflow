@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import DayflowCLICore
 
 let stdoutIsTTY = isatty(1) == 1
 

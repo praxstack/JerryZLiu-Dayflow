@@ -9,6 +9,7 @@
 //
 
 import Foundation
+import DayflowCLICore
 
 struct Activity {
   let recordId: Int

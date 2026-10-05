@@ -3,29 +3,35 @@
 Foundation-only 4 AM day / Monday-week helpers shared by the macOS app and
 `dayflow-cli`.
 
-## Layout (plan 002 option B)
+## Layout (plan 002)
 
-- Source of truth for SwiftPM: `Sources/DayflowCalendar/DayflowCalendar.swift`
-- App compiles the same file via
-  `Dayflow/Dayflow/Core/Shared/DayflowCalendar.swift` (symlink)
-- CLI `Package.swift` depends on this package (`path: ../dayflow-kernel`)
-- CLI `DayBoundary.swift` / `Categories.swift` are thin wrappers
+Source of truth: `Sources/DayflowCalendar/DayflowCalendar.swift`
+
+| Consumer | How it compiles this file |
+|----------|---------------------------|
+| macOS app (`Dayflow` target) | `Dayflow.xcodeproj` `PBXFileSystemSynchronizedRootGroup` `DayflowCalendar` → `../tools/dayflow-kernel/Sources/DayflowCalendar` (`sourceTree = SOURCE_ROOT`). Same-module as the rest of Dayflow; no `import DayflowCalendar` in app sources. |
+| `DayflowTests` | `Dayflow/DayflowTests/DayflowCalendarKernelTests.swift` via the existing `DayflowTests` synchronized group. Types come from `@testable import Dayflow` (app target compiles the kernel). |
+| `dayflow-cli` | SwiftPM `path: ../dayflow-kernel` product `DayflowCalendar`. `DayBoundary.swift` / `Categories.swift` are thin wrappers. |
+| Linux / CI | `swift test --package-path tools/dayflow-kernel` |
 
 ```
 swift test --package-path tools/dayflow-kernel
+swift test --package-path tools/dayflow-cli
 swift build --package-path tools/dayflow-cli
 ```
 
-## Remaining (plan 002 option A — macOS / Xcode)
+Do not copy `DayflowCalendar` logic back into CLI or app sources. Do not
+reintroduce a symlink under `Dayflow/Dayflow/Core/Shared/` — Xcode 16
+file-system synchronized groups do not reliably compile outgoing symlinks,
+which is why membership is declared in the pbxproj instead.
 
-Folding `dayflow-cli` into `Dayflow.xcodeproj` as an app target that compiles
-this kernel folder directly is **not** done here. Linux Cloud Agents cannot
-edit/verify Xcode target membership with `xcodebuild`.
+## Remaining (macOS-only)
 
-Until that lands:
+`xcodebuild` is not run on Linux Cloud Agents. Residual risk: confirm on macOS
+that the external synchronized group compiles `DayflowCalendar.swift` into
+`Dayflow.app` (`nm` / build log should list the file) and that
+`-only-testing:DayflowTests/DayflowCalendarKernelTests` passes.
 
-- Do not copy `DayflowCalendar` logic back into CLI sources
-- Keep the symlink in `Core/Shared/` so the synchronized Dayflow group picks
-  the kernel up
-- `Dayflow/DayflowTests/DayflowCalendarKernelTests.swift` is the macOS XCTest
-  surface (unrun in this environment)
+Folding `dayflow-cli` itself into `Dayflow.xcodeproj` as an executable target
+is still not done; the app continues to embed the CLI via the existing
+`swift build` script phase.

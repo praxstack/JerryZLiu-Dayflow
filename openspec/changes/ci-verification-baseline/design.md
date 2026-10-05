@@ -4,11 +4,13 @@
 
 Plan 001 verification baseline:
 
-- `.github/workflows/ci.yml` `unit-tests` job on `macos-14` runs
+- `.github/workflows/ci.yml` `unit-tests` job on `macos-15` with
+  `DEVELOPER_DIR=/Applications/Xcode_16.4.app/Contents/Developer` runs
   `xcodebuild test -only-testing:DayflowTests` and `swift build` for the CLI.
-  That job uses Xcode's Swift. There is **no** `setup-swift` 6.0.3 pin on this
-  workflow. The 6.0.3 pin lived on `.github/workflows/cli.yml` and is aligned
-  to **6.3.3** on the CLI-tests PR (#7), matching the Cloud Agent image.
+  Dayflow.xcodeproj is objectVersion 77; macos-14's Xcode 15.4 cannot open it.
+  That job uses Xcode's Swift. There is **no** `setup-swift` pin on this
+  workflow. Linux CLI tests with Swift **6.3.3** live on PR #7
+  (`.github/workflows/cli.yml`), matching the Cloud Agent image.
 
 README Contributing documents the xcodebuild one-liner and that xcodebuild is
 macOS-only.

@@ -13,9 +13,12 @@ extension OllamaProvider {
   /// `defaults write teleportlabs.com.Dayflow llmLocalMaxOutputTokens -int 32000`
   static let maxOutputTokensDefaultsKey = "llmLocalMaxOutputTokens"
 
-  static func resolvedMaxOutputTokens(from defaults: UserDefaults = .standard) -> Int {
+  static func resolvedMaxOutputTokens(
+    from defaults: UserDefaults = .standard,
+    fallback: Int = defaultMaxOutputTokens
+  ) -> Int {
     let configured = defaults.integer(forKey: maxOutputTokensDefaultsKey)
-    return configured > 0 ? configured : defaultMaxOutputTokens
+    return configured > 0 ? configured : fallback
   }
 
   static var configuredMaxOutputTokens: Int {

@@ -33,4 +33,27 @@ final class OllamaProviderMaxTokensTests: XCTestCase {
     defaults.set(-1, forKey: OllamaProvider.maxOutputTokensDefaultsKey)
     XCTAssertEqual(OllamaProvider.resolvedMaxOutputTokens(from: defaults), 4000)
   }
+
+  func testCustomFallbackUsedWhenUnset() {
+    let suite = "Dayflow.OllamaProviderMaxTokensTests.\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: suite)!
+    defer { defaults.removePersistentDomain(forName: suite) }
+    XCTAssertEqual(
+      OllamaProvider.resolvedMaxOutputTokens(from: defaults, fallback: 2048), 2048)
+    XCTAssertEqual(
+      OllamaProvider.resolvedMaxOutputTokens(from: defaults, fallback: 65536), 65536)
+  }
+
+  func testOverrideWinsOverGeminiAndGemmaFallbacks() {
+    let suite = "Dayflow.OllamaProviderMaxTokensTests.\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: suite)!
+    defer { defaults.removePersistentDomain(forName: suite) }
+    defaults.set(32000, forKey: OllamaProvider.maxOutputTokensDefaultsKey)
+    XCTAssertEqual(
+      OllamaProvider.resolvedMaxOutputTokens(from: defaults, fallback: 2048), 32000)
+    XCTAssertEqual(
+      OllamaProvider.resolvedMaxOutputTokens(from: defaults, fallback: 8192), 32000)
+    XCTAssertEqual(
+      OllamaProvider.resolvedMaxOutputTokens(from: defaults, fallback: 65536), 32000)
+  }
 }

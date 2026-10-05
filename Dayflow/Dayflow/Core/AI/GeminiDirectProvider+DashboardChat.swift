@@ -309,7 +309,7 @@ extension GeminiDirectProvider {
     includeThinkingConfig: Bool
   ) -> [String: Any] {
     var generationConfig: [String: Any] = [
-      "maxOutputTokens": 8192
+      "maxOutputTokens": OllamaProvider.resolvedMaxOutputTokens(fallback: 8192)
     ]
     if includeThinkingConfig {
       generationConfig["thinkingConfig"] = [

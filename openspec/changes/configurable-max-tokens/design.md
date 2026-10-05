@@ -2,13 +2,19 @@
 
 ## What this change actually ships
 
-`OllamaProvider.resolvedMaxOutputTokens(from:)` reads UserDefaults key
-`llmLocalMaxOutputTokens` (positive int; 0/missing → 4000).
+`OllamaProvider.resolvedMaxOutputTokens(from:fallback:)` reads UserDefaults key
+`llmLocalMaxOutputTokens` (positive int; 0/missing → the call-site fallback,
+default 4000).
 
-`OllamaProvider.callTextAPI` / `generateText` already pass that value.
-`OpenAICompatibleProvider.makeRequest` now uses the same resolver instead of
-hardcoding `max_tokens: 8000` (JerryZLiu/Dayflow#246, LiteLLM / custom
-OpenAI-compatible endpoints).
+Call sites that now go through that resolver:
+
+- Ollama / OpenAI-compatible `max_tokens` (fallback 4000; was hardcoded 8000
+  on the OpenAI-compatible path)
+- Gemini `generateText` / dashboard chat (fallback 8192)
+- Gemini activity cards + transcription (fallback 65536)
+- Gemini connection test (fallback 4096)
+- Gemma backup frame/summary/title/merge calls (fallbacks 2048/1024/256/512)
+- Daily recap Gemini/local generation (fallback 8192)
 
 Override:
 
@@ -16,12 +22,11 @@ Override:
 defaults write teleportlabs.com.Dayflow llmLocalMaxOutputTokens -int 32000
 ```
 
-No Settings UI in this PR.
+No Settings UI in this PR (macOS screen, not verifiable here).
 
 ## What this does not ship
 
 - A Settings slider
-- Changing Gemini / Gemma `maxOutputTokens` constants
 - `xcodebuild` verification in this Linux environment
 
 ## Verification

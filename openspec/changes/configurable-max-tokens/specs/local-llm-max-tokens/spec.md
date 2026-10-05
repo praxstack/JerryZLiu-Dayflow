@@ -17,6 +17,12 @@ llmLocalMaxOutputTokens UserDefaults integer.
 OpenAICompatibleProvider.makeRequest SHALL pass
 OllamaProvider.resolvedMaxOutputTokens() instead of a hardcoded 8000.
 
-#### Scenario: LiteLLM / custom endpoint
-- **WHEN** a custom OpenAI-compatible endpoint generates timeline cards
-- **THEN** max_tokens comes from the resolver, not 8000
+### Requirement: Gemini and Gemma use the same resolver
+GeminiDirectProvider and GemmaBackupProvider SHALL pass
+OllamaProvider.resolvedMaxOutputTokens(fallback:) instead of bare integer
+constants. Unset defaults keep each call site's original fallback.
+
+#### Scenario: Override applies to Gemma frames
+- **WHEN** llmLocalMaxOutputTokens is 32000
+- **THEN** Gemma describe_frames uses 32000 rather than 2048
+

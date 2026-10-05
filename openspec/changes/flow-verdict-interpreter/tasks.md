@@ -5,5 +5,6 @@
 - [x] 3. Extract FlowOverlayMapping; wire FlowSessionMirror
 - [x] 4. Add FlowVerdictInterpreterTests + FlowNativeSnapshotTests
 - [x] 5. Linux SwiftPM kernel tests in tools/flow-kernel
-- [ ] 6. FlowSessionMirrorTests with mock FlowBridgeForwarding (needs macOS / singleton)
+- [x] 6. FlowSessionMirrorTests with MockFlowBridge on Linux (FlowSessionMirrorCore)
 - [ ] 7. xcodebuild DayflowTests on macOS CI
+

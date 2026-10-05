@@ -110,7 +110,7 @@ struct SettingsStorageTabView: View {
 
         SettingsRow(
           label: String(localized: "Capture frequency"),
-          subtitle: String(localized: "How often a frame is taken"), showsDivider: false
+          subtitle: String(localized: "How often a frame is taken")
         ) {
           settingsMenu(
             selected: ScreenshotConfig.label(forInterval: viewModel.captureInterval),
@@ -119,6 +119,17 @@ struct SettingsStorageTabView: View {
             },
             onSelect: viewModel.setCaptureInterval
           )
+        }
+
+        SettingsRow(
+          label: String(localized: "Slow down capture when idle"),
+          subtitle: String(
+            localized:
+              "After 2 minutes without keyboard or mouse input, Dayflow takes screenshots less often to save disk space and battery."
+          ),
+          showsDivider: false
+        ) {
+          SettingsToggle(isOn: $viewModel.idleCaptureThrottleEnabled)
         }
 
         VStack(alignment: .leading, spacing: 4) {

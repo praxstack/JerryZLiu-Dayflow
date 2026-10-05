@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [main]
 
+# macOS-only verification baseline (plan 001). Do not add an ubuntu xcodebuild
+# job here — Darwin-only app sources would go red. Linux `swift test` for
+# dayflow-cli lives on the CLI test-suite workflow:
+#   .github/workflows/cli.yml  (PR #7, branch prax/cli-test-suite-6fc7)
+
 jobs:
   unit-tests:
     runs-on: macos-14

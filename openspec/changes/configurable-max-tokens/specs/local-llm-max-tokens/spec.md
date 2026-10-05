@@ -26,3 +26,16 @@ constants. Unset defaults keep each call site's original fallback.
 - **WHEN** llmLocalMaxOutputTokens is 32000
 - **THEN** Gemma describe_frames uses 32000 rather than 2048
 
+### Requirement: Settings writes the same key the resolver reads
+Providers settings SHALL save a positive integer to
+`OllamaProvider.maxOutputTokensDefaultsKey` (`llmLocalMaxOutputTokens`) and
+SHALL reset by removing that key.
+
+#### Scenario: Save from Settings
+- **WHEN** the user saves 32000 in Settings > Providers
+- **THEN** `resolvedMaxOutputTokens()` is 32000
+
+#### Scenario: Reset from Settings
+- **WHEN** the user resets the control
+- **THEN** the key is absent and `resolvedMaxOutputTokens()` is 4000
+

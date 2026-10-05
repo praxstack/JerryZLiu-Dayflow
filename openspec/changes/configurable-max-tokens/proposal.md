@@ -9,6 +9,7 @@ reasoning models.
 - `llmLocalMaxOutputTokens` UserDefaults override (int > 0); default 4000.
 - OllamaProvider chat requests and OpenAICompatibleProvider.makeRequest both
   use `resolvedMaxOutputTokens()`.
+- Settings > Providers control reads/writes that same key.
 
 ## Capabilities
 
@@ -18,4 +19,4 @@ reasoning models.
 - `local-llm-max-tokens`: local and OpenAI-compatible chat completions use a configurable max token cap.
 
 ## Impact
-OllamaProvider+Networking.swift, OpenAICompatibleProvider.swift, DayflowTests.
+OllamaProvider+Networking.swift, Settings Providers tab, DayflowTests.

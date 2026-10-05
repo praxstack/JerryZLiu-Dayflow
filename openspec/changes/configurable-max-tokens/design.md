@@ -4,7 +4,8 @@
 
 `OllamaProvider.resolvedMaxOutputTokens(from:fallback:)` reads UserDefaults key
 `llmLocalMaxOutputTokens` (positive int; 0/missing → the call-site fallback,
-default 4000).
+default 4000). Settings > Providers persists that same key through
+`OllamaProvider.persistMaxOutputTokens`.
 
 Call sites that now go through that resolver:
 
@@ -22,16 +23,18 @@ Override:
 defaults write teleportlabs.com.Dayflow llmLocalMaxOutputTokens -int 32000
 ```
 
-No Settings UI in this PR (macOS screen, not verifiable here).
+Settings > Providers also has a Max output tokens field (Save / Reset) bound
+to the same key. Reset removes the override so Gemini/Gemma keep per-call
+fallbacks.
 
 ## What this does not ship
 
-- A Settings slider
-- `xcodebuild` verification in this Linux environment
+- `xcodebuild` / macOS UI verification in this Linux environment
 
 ## Verification
 
 Resolver tests: `Dayflow/DayflowTests/OllamaProviderMaxTokensTests.swift`
 Request tests: `OpenAICompatibleProviderTests.testMakeRequestHonorsConfiguredMaxTokens`
+Settings binding: `ProvidersSettingsViewModelTests.testLocalMaxOutputTokensSaveWritesTheResolverKey`
 
 Those XCTest files need macOS `xcodebuild`. Not run here.

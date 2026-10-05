@@ -4,6 +4,7 @@ import SwiftUI
 struct SettingsProvidersTabView: View {
   @ObservedObject var viewModel: ProvidersSettingsViewModel
   @ObservedObject private var authManager = DayflowAuthManager.shared
+  @FocusState private var isLocalMaxOutputTokensFocused: Bool
 
   var body: some View {
     VStack(alignment: .leading, spacing: SettingsStyle.sectionSpacing) {
@@ -32,6 +33,7 @@ struct SettingsProvidersTabView: View {
       }
 
       currentConfigurationSection
+      localMaxOutputTokensSection
       connectionHealthSection
       failoverRoutingSection
 
@@ -156,6 +158,71 @@ struct SettingsProvidersTabView: View {
       SettingsRow(label: String(localized: "Status"), showsDivider: false) {
         SettingsMetadata(
           text: viewModel.statusText(for: .dayflow) ?? String(localized: "Requires Dayflow Pro"))
+      }
+    }
+  }
+
+  // MARK: - Max output tokens
+
+  private var localMaxOutputTokensSection: some View {
+    SettingsSection(
+      title: String(localized: "Max output tokens"),
+      subtitle: String(
+        localized:
+          "Raise this for reasoning models that otherwise return empty titles. Saving updates the same setting local generation reads for max_tokens."
+      )
+    ) {
+      VStack(alignment: .leading, spacing: 12) {
+        HStack(spacing: 10) {
+          TextField(
+            String(OllamaProvider.defaultMaxOutputTokens),
+            text: $viewModel.localMaxOutputTokensText
+          )
+          .textFieldStyle(.roundedBorder)
+          .disableAutocorrection(true)
+          .frame(width: 120)
+          .focused($isLocalMaxOutputTokensFocused)
+          .onChange(of: viewModel.localMaxOutputTokensText) {
+            viewModel.markLocalMaxOutputTokensEdited()
+          }
+          .onSubmit {
+            viewModel.saveLocalMaxOutputTokens()
+            isLocalMaxOutputTokensFocused = false
+          }
+
+          SettingsSecondaryButton(
+            title: viewModel.isLocalMaxOutputTokensSaved
+              ? String(localized: "Saved") : String(localized: "Save"),
+            systemImage: viewModel.isLocalMaxOutputTokensSaved ? "checkmark" : nil,
+            isDisabled: viewModel.isLocalMaxOutputTokensSaved,
+            action: {
+              viewModel.saveLocalMaxOutputTokens()
+              isLocalMaxOutputTokensFocused = false
+            }
+          )
+
+          SettingsSecondaryButton(
+            title: String(localized: "Reset"),
+            isDisabled: !viewModel.hasLocalMaxOutputTokensOverride,
+            action: {
+              viewModel.resetLocalMaxOutputTokens()
+              isLocalMaxOutputTokensFocused = false
+            }
+          )
+
+          Spacer()
+        }
+
+        Text(viewModel.localMaxOutputTokensStatusText)
+          .font(.custom("Figtree", size: 12))
+          .foregroundColor(SettingsStyle.secondary)
+          .fixedSize(horizontal: false, vertical: true)
+
+        if let message = viewModel.localMaxOutputTokensValidationMessage {
+          Text(message)
+            .font(.custom("Figtree", size: 12))
+            .foregroundColor(.red.opacity(0.8))
+        }
       }
     }
   }

@@ -37,6 +37,11 @@ let package = Package(
       name: "dayflow",
       dependencies: [calendarDependency] + sqliteDependency,
       path: "Sources/dayflow"
-    )
+    ),
+    .testTarget(
+      name: "DayflowKernelWiringTests",
+      dependencies: [calendarDependency],
+      path: "Tests/DayflowKernelWiringTests"
+    ),
   ]
 )

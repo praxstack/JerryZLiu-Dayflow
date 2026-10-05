@@ -5,11 +5,14 @@
 A shared Foundation-only calendar kernel used by both the macOS app and
 `dayflow-cli`:
 
-- Source of truth: `Dayflow/Dayflow/Core/Shared/DayflowCalendar.swift`
-- Linux/SwiftPM tests: `tools/dayflow-kernel` (path-depends on that folder)
-- CLI `DayBoundary.swift` / `Categories.swift` are wrappers, not copies
+- Source of truth for SwiftPM: `tools/dayflow-kernel/Sources/DayflowCalendar/DayflowCalendar.swift`
+- App compiles it via `Dayflow/Dayflow/Core/Shared/DayflowCalendar.swift` (symlink)
+- CLI `Package.swift` path-depends on `../dayflow-kernel`; `DayBoundary.swift` /
+  `Categories.swift` are wrappers, not copies
 - App `StorageDateHelpers.getDayInfoFor4AMBoundary` and
   `WeeklyDateRange.containing` delegate to the same types
+- CLI `Tests/DayflowKernelWiringTests` proves the executable package links
+  `DayflowCalendar`
 
 Week windows use the app's Monday-first Gregorian calendar
 (`firstWeekday = 2`, `minimumDaysInFirstWeek = 4`, `yearForWeekOfYear`) so
@@ -18,10 +21,10 @@ weekday-arithmetic copy is gone.
 
 ## What this does not ship
 
-- The CLI is not an Xcode target (plan 002 option A). Option B is the
-  interim SwiftPM package.
-- `xcodebuild` / `DayflowCalendarKernelTests` cannot be executed in this
-  Linux Cloud Agent image. Those XCTest files are for macOS CI.
+- Folding the CLI into `Dayflow.xcodeproj` as an app target (plan 002 option A).
+  Documented in `tools/dayflow-kernel/README.md`. Linux cannot verify Xcode
+  target membership.
+- `xcodebuild` / `DayflowCalendarKernelTests` in this Linux Cloud Agent image.
 - CategoryStore write-path / UI is unchanged; only the CLI read-path list
   is shared.
 
@@ -35,5 +38,5 @@ weekday-arithmetic copy is gone.
 
 ```
 swift test --package-path tools/dayflow-kernel
-swift build --package-path tools/dayflow-cli
+swift test --package-path tools/dayflow-cli
 ```

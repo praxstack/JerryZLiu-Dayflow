@@ -38,17 +38,6 @@ final class FlowDistractionAgent: ObservableObject {
   @Published private(set) var lastTickAt: Date?
   @Published private(set) var lastTickSeconds: Double?
 
-  /// The model's per-turn reply. Anything unparseable is treated as
-  /// on-task/no-action so a flaky turn can never fire a bogus nudge.
-  private struct Verdict: Decodable {
-    let status: String?
-    let action: String?
-    let message: String?
-    let reason: String?
-    /// Short goal ids ("g2") the model saw finished on screen this turn.
-    let completed_goals: [String]?
-  }
-
   /// The optional second object in a reply: the model's revised timeline.
   private struct TimelineReply: Decodable {
     let timeline: [FlowSessionTimeline.ModelItem]?
@@ -453,10 +442,8 @@ final class FlowDistractionAgent: ObservableObject {
     consecutiveFailures = 0
     appendTranscript(reply)
 
-    let objects = Self.jsonObjects(in: reply)
-    guard let first = objects.first,
-      let verdict = try? JSONDecoder().decode(Verdict.self, from: Data(first.utf8))
-    else {
+    let objects = FlowVerdictInterpreter.jsonObjects(in: reply)
+    guard let verdict = FlowVerdictInterpreter.parse(reply) else {
       print("[FlowAgent] Unparseable reply, treating as on-task: \(reply.prefix(200))")
       return
     }
@@ -496,7 +483,7 @@ final class FlowDistractionAgent: ObservableObject {
     return (try? decoder.decode(TimelineReply.self, from: data))?.timeline
   }
 
-  private func handle(verdict: Verdict) {
+  private func handle(verdict: FlowVerdictInterpreter.Verdict) {
     let offTask = verdict.status == "off_task"
     if offTask != lastReportedOffTask {
       lastReportedOffTask = offTask
@@ -742,46 +729,6 @@ final class FlowDistractionAgent: ObservableObject {
     if transcript.count > 200 {
       transcript.removeFirst(transcript.count - 200)
     }
-  }
-
-  // MARK: - Verdict parsing
-
-  /// Every top-level {...} in the reply, in order, tolerating fences and
-  /// stray prose around them. Strings are skipped so braces inside a title
-  /// don't confuse the depth count.
-  private static func jsonObjects(in reply: String) -> [String] {
-    var objects: [String] = []
-    var depth = 0
-    var start: String.Index?
-    var inString = false
-    var escaped = false
-    var index = reply.startIndex
-    while index < reply.endIndex {
-      let character = reply[index]
-      if inString {
-        if escaped {
-          escaped = false
-        } else if character == "\\" {
-          escaped = true
-        } else if character == "\"" {
-          inString = false
-        }
-      } else if character == "\"" {
-        inString = true
-      } else if character == "{" {
-        if depth == 0 { start = index }
-        depth += 1
-      } else if character == "}" {
-        depth -= 1
-        if depth == 0, let begin = start {
-          objects.append(String(reply[begin...index]))
-          start = nil
-        }
-        if depth < 0 { depth = 0 }
-      }
-      index = reply.index(after: index)
-    }
-    return objects
   }
 
   // MARK: - Screenshot capture

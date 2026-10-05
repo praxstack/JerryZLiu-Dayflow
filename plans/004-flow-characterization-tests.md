@@ -17,6 +17,7 @@
 - **Depends on**: plans/001-ci-verification-baseline.md
 - **Category**: tests
 - **Planned at**: commit `274c059`, 2026-08-29
+- **Landed (partial)**: FlowVerdictInterpreter + tests (prax/flow-verdict-interpreter-6fc7). Snapshot/mirror tests still TODO.
 
 ## Why this matters
 

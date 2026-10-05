@@ -1,35 +1,32 @@
 # Design
 
-## Context
-UserDefaults int override, no Settings UI in this PR (smallest safe fix).
+## What this change actually ships
 
-## Goals / Non-Goals
-- Goals: ship a focused, reviewable change that can merge independently of other overnight PRs.
-- Non-goals: rewriting the macOS app UI, adding MCP servers, merging to main.
+`OllamaProvider.resolvedMaxOutputTokens(from:)` reads UserDefaults key
+`llmLocalMaxOutputTokens` (positive int; 0/missing → 4000).
 
-## Decisions
-- resolvedMaxOutputTokens(from: UserDefaults).
-- ChatRequest and generateText defaults call the resolver.
+`OllamaProvider.callTextAPI` / `generateText` already pass that value.
+`OpenAICompatibleProvider.makeRequest` now uses the same resolver instead of
+hardcoding `max_tokens: 8000` (JerryZLiu/Dayflow#246, LiteLLM / custom
+OpenAI-compatible endpoints).
 
-## Design review loop
+Override:
 
-### Principal engineer (round 1)
-PE: document defaults write in a comment. Do not add UI chrome.
+```
+defaults write teleportlabs.com.Dayflow llmLocalMaxOutputTokens -int 32000
+```
 
-### Senior principal engineer (round 1)
-SPE: inject UserDefaults in the resolver function for tests; keep a standard wrapper for production.
+No Settings UI in this PR.
 
-### Second senior principal engineer (round 2)
-Approve.
+## What this does not ship
 
-### Decision
-Approved. No Settings UI.
+- A Settings slider
+- Changing Gemini / Gemma `maxOutputTokens` constants
+- `xcodebuild` verification in this Linux environment
 
-## Risks / Trade-offs
-Integer 0 means unset because UserDefaults.integer returns 0 for missing keys.
+## Verification
 
-## Migration Plan
-None. Additive on a feature branch.
+Resolver tests: `Dayflow/DayflowTests/OllamaProviderMaxTokensTests.swift`
+Request tests: `OpenAICompatibleProviderTests.testMakeRequestHonorsConfiguredMaxTokens`
 
-## Open Questions
-None remaining for this scoped change.
+Those XCTest files need macOS `xcodebuild`. Not run here.

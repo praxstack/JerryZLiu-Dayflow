@@ -27,6 +27,14 @@ final class OpenAICompatibleProviderTests: XCTestCase {
     }
   }
 
+  func testMakeRequestHonorsConfiguredMaxTokens() {
+    let provider = OpenAICompatibleProvider(configuration: configuration("https://example.com/v1"))
+    let overridden = provider.makeRequest(content: [], maxTokens: 32000)
+    XCTAssertEqual(overridden.max_tokens, 32000)
+    let defaulted = provider.makeRequest(content: [])
+    XCTAssertEqual(defaulted.max_tokens, OllamaProvider.resolvedMaxOutputTokens())
+  }
+
   func testScreenshotsTravelTogetherWithActualTimestamps() async throws {
     let image = NSBitmapImageRep(
       bitmapDataPlanes: nil, pixelsWide: 2, pixelsHigh: 2, bitsPerSample: 8,

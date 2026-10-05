@@ -1,18 +1,21 @@
 # Proposal
 
 ## Why
-JerryZLiu/Dayflow#246: local/OpenAI-compatible calls hardcode max_tokens at 4000, which truncates reasoning models (empty titles).
+JerryZLiu/Dayflow#246: local/OpenAI-compatible calls hardcoded max_tokens
+(4000 on Ollama, 8000 on the OpenAI-compatible path), which truncates
+reasoning models.
 
 ## What Changes
-- Add llmLocalMaxOutputTokens UserDefaults override (int > 0) for OllamaProvider chat requests.
-- Default remains 4000.
+- `llmLocalMaxOutputTokens` UserDefaults override (int > 0); default 4000.
+- OllamaProvider chat requests and OpenAICompatibleProvider.makeRequest both
+  use `resolvedMaxOutputTokens()`.
 
 ## Capabilities
 
 ### New Capabilities
 
 ### Modified Capabilities
-- `local-llm-max-tokens`: local chat completions use a configurable max token cap.
+- `local-llm-max-tokens`: local and OpenAI-compatible chat completions use a configurable max token cap.
 
 ## Impact
-OllamaProvider+Networking.swift, DayflowTests.
+OllamaProvider+Networking.swift, OpenAICompatibleProvider.swift, DayflowTests.

@@ -9,31 +9,54 @@
 //
 
 import Foundation
-import DayflowCLICore
 
-struct Activity {
-  let recordId: Int
-  let start: Date
-  let end: Date
-  let title: String
-  let summary: String
-  let detailedSummary: String
-  let category: String
-  let subcategory: String
-  let apps: [String]
-  let distractionCount: Int
+public struct Activity {
+  public let recordId: Int
+  public let start: Date
+  public let end: Date
+  public let title: String
+  public let summary: String
+  public let detailedSummary: String
+  public let category: String
+  public let subcategory: String
+  public let apps: [String]
+  public let distractionCount: Int
 
-  var durationMinutes: Int { max(0, Int(end.timeIntervalSince(start)) / 60) }
+  public var durationMinutes: Int { max(0, Int(end.timeIntervalSince(start)) / 60) }
+
+  public init(
+    recordId: Int,
+    start: Date,
+    end: Date,
+    title: String,
+    summary: String,
+    detailedSummary: String,
+    category: String,
+    subcategory: String,
+    apps: [String],
+    distractionCount: Int
+  ) {
+    self.recordId = recordId
+    self.start = start
+    self.end = end
+    self.title = title
+    self.summary = summary
+    self.detailedSummary = detailedSummary
+    self.category = category
+    self.subcategory = subcategory
+    self.apps = apps
+    self.distractionCount = distractionCount
+  }
 }
 
-struct StandupDocument {
-  let day: String
-  let highlightsTitle: String
-  let highlights: [String]
-  let tasksTitle: String
-  let tasks: [String]
-  let blockersTitle: String
-  let blockersBody: String
+public struct StandupDocument {
+  public let day: String
+  public let highlightsTitle: String
+  public let highlights: [String]
+  public let tasksTitle: String
+  public let tasks: [String]
+  public let blockersTitle: String
+  public let blockersBody: String
 }
 
 // The subset of timeline_cards.metadata this tool reads. The app's full
@@ -87,7 +110,7 @@ private let cardColumns = """
   category, subcategory, metadata
   """
 
-func fetchActivities(db: Database, window: DayWindow) throws -> [Activity] {
+public func fetchActivities(db: Database, window: DayWindow) throws -> [Activity] {
   try db.query(
     """
     SELECT \(cardColumns) FROM timeline_cards
@@ -101,7 +124,7 @@ func fetchActivities(db: Database, window: DayWindow) throws -> [Activity] {
   ).compactMap(activity(from:))
 }
 
-func fetchActivities(db: Database, from: Date, to: Date) throws -> [Activity] {
+public func fetchActivities(db: Database, from: Date, to: Date) throws -> [Activity] {
   try db.query(
     """
     SELECT \(cardColumns) FROM timeline_cards
@@ -115,14 +138,14 @@ func fetchActivities(db: Database, from: Date, to: Date) throws -> [Activity] {
   ).compactMap(activity(from:))
 }
 
-func fetchActivity(db: Database, recordId: Int) throws -> Activity? {
+public func fetchActivity(db: Database, recordId: Int) throws -> Activity? {
   try db.query(
     "SELECT \(cardColumns) FROM timeline_cards WHERE id = ? AND is_deleted = 0",
     [.integer(Int64(recordId))]
   ).compactMap(activity(from:)).first
 }
 
-func searchActivities(db: Database, text: String, limit: Int = 50) throws -> [Activity] {
+public func searchActivities(db: Database, text: String, limit: Int = 50) throws -> [Activity] {
   let pattern = "%\(text)%"
   return try db.query(
     """
@@ -135,7 +158,7 @@ func searchActivities(db: Database, text: String, limit: Int = 50) throws -> [Ac
   ).compactMap(activity(from:))
 }
 
-func fetchStandup(db: Database, day: String) throws -> StandupDocument? {
+public func fetchStandup(db: Database, day: String) throws -> StandupDocument? {
   guard
     let payload = try db.query(
       "SELECT payload_json FROM daily_standup_entries WHERE standup_day = ?",
@@ -166,15 +189,15 @@ func fetchStandup(db: Database, day: String) throws -> StandupDocument? {
   )
 }
 
-struct StatusInfo {
-  let databasePath: String
-  let lastCaptureAt: Date?
-  let pendingBatches: Int
-  let failedBatches: Int
-  let today: String
+public struct StatusInfo {
+  public let databasePath: String
+  public let lastCaptureAt: Date?
+  public let pendingBatches: Int
+  public let failedBatches: Int
+  public let today: String
 }
 
-func fetchStatus(db: Database, path: String) throws -> StatusInfo {
+public func fetchStatus(db: Database, path: String) throws -> StatusInfo {
   let lastCapture = try db.query(
     "SELECT max(captured_at) AS ts FROM screenshots WHERE is_deleted = 0"
   ).first?.int("ts")

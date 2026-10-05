@@ -32,6 +32,7 @@ let package = Package(
   targets: sqliteTargets + [
     .target(
       name: "DayflowCLICore",
+      dependencies: sqliteDependency,
       path: "Sources/DayflowCLICore"
     ),
     .executableTarget(

@@ -22,6 +22,12 @@ public struct DayWindow {
   public let dayKey: String  // "2026-03-11"
   public let start: Date  // 4 AM that day
   public let end: Date  // 4 AM the next day
+
+  public init(dayKey: String, start: Date, end: Date) {
+    self.dayKey = dayKey
+    self.start = start
+    self.end = end
+  }
 }
 
 /// The Dayflow day containing `date`. Before 4 AM this resolves to the
@@ -51,6 +57,11 @@ public func dayWindow(forKey key: String) -> DayWindow? {
 public struct WeekWindow {
   public let start: Date  // Monday 4 AM
   public let end: Date  // next Monday 4 AM
+
+  public init(start: Date, end: Date) {
+    self.start = start
+    self.end = end
+  }
 }
 
 /// The Dayflow week containing `date`. Mirrors WeeklyDateRange.containing().

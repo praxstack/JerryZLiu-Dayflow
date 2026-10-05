@@ -17,7 +17,8 @@
 - **Depends on**: plans/001-ci-verification-baseline.md
 - **Category**: tests
 - **Planned at**: commit `274c059`, 2026-08-29
-- **Landed**: DayflowCLICore tests + Python CLI/MCP suite (prax/cli-test-suite-6fc7)
+- **Landed (partial)**: DayflowCLICore + DayBoundary/JSONOut/Queries Swift tests +
+  Python CLI/MCP suite (prax/cli-test-suite-6fc7). Write-tool mock tests still TODO.
 
 ## Why this matters
 

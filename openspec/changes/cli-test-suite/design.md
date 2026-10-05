@@ -1,38 +1,30 @@
 # Design
 
-## Context
-Library split is the smallest way to unit-test DayBoundary; MCP stays in the executable and is tested via subprocess.
+## What this change actually ships
 
-## Goals / Non-Goals
-- Goals: ship a focused, reviewable change that can merge independently of other overnight PRs.
-- Non-goals: rewriting the macOS app UI, adding MCP servers, merging to main.
+CLI test coverage toward plan 003:
 
-## Decisions
-- DayflowCLICore contains DayBoundary only (public types/functions).
-- Executable depends on DayflowCLICore and imports it.
-- Swift tests: DayflowCLICoreTests.
-- Python: tools/dayflow-cli/tests/test_cli.py.
-- CI: .github/workflows/cli.yml with swift-actions/setup-swift.
+- `DayflowCLICore` library: DayBoundary, Database (read-only SQLite), Queries,
+  JSON envelope builders (`JSONOut.timelineEnvelope`)
+- XCTest: DayBoundary, JSONOut keys, `fetchActivities` against the committed
+  fixture generator
+- Python subprocess tests for `timeline --json` and MCP `tools/list`
+- GitHub workflow `.github/workflows/cli.yml` on Ubuntu with Swift **6.3.3**
+  (aligned with the Cloud Agent image; previously pinned 6.0.3)
 
-## Design review loop
+`printJSON` / `failJSON` stay in the executable because they call `fail()` and
+`exit`.
 
-### Principal engineer (round 1)
-Do not @testable-import the executable. Move only DayBoundary.swift into DayflowCLICore. JSONOut stays put because it calls fail()/telemetry.
+## What this does not ship
 
-### Senior principal engineer (round 1)
-Python subprocess tests are acceptable on Linux Cloud Agents where XCTest GUI is unavailable. Keep them deterministic with the existing fixture generator.
+- Mocked write-tool / Unix-socket integration tests
+- Folding the CLI into the Xcode app target (plan 002 option A)
+- `xcodebuild` (not available in this Linux environment)
 
-### Second senior principal engineer (round 2)
-Approve. Separate GitHub workflow cli.yml so this PR does not edit ci.yml.
+## Verification (this environment)
 
-### Decision
-Approved after shrinking from a full library split of all sources.
-
-## Risks / Trade-offs
-Default-argument public API is a behavior-preserving move. MCP tests must not hang — kill the process after one tools/list round-trip.
-
-## Migration Plan
-None. Additive on a feature branch.
-
-## Open Questions
-None remaining for this scoped change.
+```
+swift test --package-path tools/dayflow-cli
+bash tools/dayflow-cli/fixtures/create_fixture_db.sh
+python3 tools/dayflow-cli/tests/test_cli.py
+```

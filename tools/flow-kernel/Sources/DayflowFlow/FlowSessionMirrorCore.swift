@@ -57,6 +57,7 @@ public enum FlowSessionMirrorMessages {
   public static let sessionStarted = "Your flow session starts now!"
   public static let breakOver = "Break's over. Back to it!"
   public static let backToWork = "Nice! Keep at it"
+  public static let snoozeExpired = "Snooze is up — ready to get back to it?"
 }
 
 public final class FlowSessionMirrorCore {
@@ -164,5 +165,27 @@ public final class FlowSessionMirrorCore {
       current: state.overlay,
       nudgeStreakAfterThisNudge: streakAfter
     )
+  }
+
+  /// Deadline effects from `FlowTickPolicy` — session end, break end, snooze.
+  public func applyDeadlineEffect(_ effect: FlowDeadlineEffect) {
+    switch effect {
+    case .clearSnooze:
+      state.snoozed = false
+    case .snoozeRenudge(let escalated):
+      state.nudgeStreak += 1
+      state.overlay = .nudge(
+        message: FlowSessionMirrorMessages.snoozeExpired, escalated: escalated)
+    case .sessionEnded:
+      var ended = state.snapshot
+      ended.phase = .ended
+      apply(ended)
+      state.overlay = .sessionEnded
+    case .breakEnded:
+      var active = state.snapshot
+      active.phase = .active
+      active.breakEndsAt = nil
+      apply(active)
+    }
   }
 }

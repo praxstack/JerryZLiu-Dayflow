@@ -324,7 +324,7 @@ final class FlowDistractionAgent: ObservableObject {
   private func scheduleTimer() {
     tickTimer?.invalidate()
     tickTimer = Timer.scheduledTimer(
-      withTimeInterval: max(5, settings.tickSeconds), repeats: true
+      withTimeInterval: max(FlowTickPolicy.minimumTickSeconds, settings.tickSeconds), repeats: true
     ) { _ in
       MainActor.assumeIsolated {
         FlowDistractionAgent.shared.tick()
@@ -333,8 +333,19 @@ final class FlowDistractionAgent: ObservableObject {
   }
 
   private func tick() {
+    switch FlowTickPolicy.beginTick(
+      running: codexSessionId != nil && workDirectory != nil,
+      paused: paused,
+      inFlight: tickInFlight,
+      enabled: settings.agentEnabled,
+      phase: FlowSessionMirror.shared.snapshot.phase
+    ) {
+    case .skip:
+      return
+    case .begin:
+      break
+    }
     guard let sessionId = codexSessionId, let directory = workDirectory else { return }
-    guard !paused, !tickInFlight else { return }
 
     tickInFlight = true
     let gen = generation
@@ -414,8 +425,16 @@ final class FlowDistractionAgent: ObservableObject {
     lastTickAt = Date()
     lastTickSeconds = seconds
 
-    guard let reply else {
-      consecutiveFailures += 1
+    let outcome = FlowTickPolicy.finishTick(
+      reply: reply,
+      lastReportedOffTask: lastReportedOffTask,
+      consecutiveFailures: consecutiveFailures,
+      maxFailures: settings.maxFailures
+    )
+
+    switch outcome.kind {
+    case .failed:
+      consecutiveFailures = outcome.consecutiveFailures
       print("[FlowAgent] Tick failed (\(consecutiveFailures)): \(error ?? "unknown")")
       appendTranscript("Turn failed: \(error ?? "unknown")")
       // Codex lost the conversation (its rollout file is gone, e.g. a full
@@ -430,7 +449,7 @@ final class FlowDistractionAgent: ObservableObject {
         pendingNotes.append("(Re-briefed mid-session after the previous conversation was lost.)")
         return
       }
-      if consecutiveFailures >= settings.maxFailures {
+      if outcome.shouldStop {
         print("[FlowAgent] Stopping after \(consecutiveFailures) consecutive failures")
         appendTranscript("Agent stopped after \(consecutiveFailures) consecutive failures.")
         AnalyticsService.shared.capture("flow_agent_gave_up")
@@ -438,23 +457,24 @@ final class FlowDistractionAgent: ObservableObject {
         statusLine = "Stopped after \(consecutiveFailures) failures"
       }
       return
-    }
-    consecutiveFailures = 0
-    appendTranscript(reply)
-
-    let objects = FlowVerdictInterpreter.jsonObjects(in: reply)
-    // decode(nil) means garbage: fail-safe on-task / no overlay, and do not
-    // flip lastReportedOffTask (a flaky turn must not close a real incident).
-    guard let verdict = FlowVerdictInterpreter.decode(reply) else {
-      print("[FlowAgent] Unparseable reply, treating as on-task: \(reply.prefix(200))")
+    case .unparseableFailSafe:
+      consecutiveFailures = 0
+      if let reply {
+        appendTranscript(reply)
+        print("[FlowAgent] Unparseable reply, treating as on-task: \(reply.prefix(200))")
+      }
       return
+    case .applied:
+      consecutiveFailures = 0
+      guard let reply else { return }
+      appendTranscript(reply)
+      let objects = FlowVerdictInterpreter.jsonObjects(in: reply)
+      // Fail-safe on-task / no overlay for garbage is handled above; a decoded
+      // verdict still must not flip lastReportedOffTask unless status changed.
+      handle(outcome.parsed)
+      timeline.observe(offTask: outcome.parsed.isOffTask, front: front, reason: outcome.parsed.reason)
+      if askedTimeline { readBackTimeline(fallback: Array(objects.dropFirst())) }
     }
-    let parsed = FlowVerdictInterpreter.interpret(verdict)
-    // The verdict comes first and is acted on first; the timeline (when the
-    // tick asked for one) rides behind it in a second object.
-    handle(parsed)
-    timeline.observe(offTask: parsed.isOffTask, front: front, reason: parsed.reason)
-    if askedTimeline { readBackTimeline(fallback: Array(objects.dropFirst())) }
   }
 
   /// After a timeline turn: take the file the model edited (or, if it

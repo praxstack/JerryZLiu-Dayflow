@@ -60,4 +60,24 @@ final class TimelineReplacementPolicyTests: XCTestCase {
       TimelineReplacementPolicy.isUsableActivityContext(
         category: "Work", title: "Wrote tests"))
   }
+
+  func testHistoricalCleanupKeepsOneFailedCardPerWindow() {
+    let cards: [TimelineReplacementPolicy.StoredCardRef] = [
+      .init(id: 10, day: "2026-06-16", startTs: 100, endTs: 200, title: "Processing failed", isDeleted: false),
+      .init(id: 11, day: "2026-06-16", startTs: 100, endTs: 200, title: "Processing failed", isDeleted: false),
+      .init(id: 12, day: "2026-06-16", startTs: 200, endTs: 300, title: "Processing failed", isDeleted: false),
+      .init(id: 13, day: "2026-06-16", startTs: 100, endTs: 200, title: "Wrote tests", isDeleted: false),
+      .init(id: 14, day: "2026-06-16", startTs: 100, endTs: 200, title: "Processing failed", isDeleted: true),
+    ]
+    XCTAssertEqual(
+      TimelineReplacementPolicy.historicalDuplicateFailedIds(in: cards),
+      [11])
+  }
+
+  func testHistoricalCleanupSQLTargetsProcessingFailedOnly() {
+    let sql = TimelineReplacementPolicy.historicalDuplicateFailedCardsSQL
+    XCTAssertTrue(sql.contains("SET is_deleted = 1"))
+    XCTAssertTrue(sql.contains("'\(TimelineReplacementPolicy.processingFailedTitle)'"))
+    XCTAssertTrue(sql.contains("GROUP BY day"))
+  }
 }

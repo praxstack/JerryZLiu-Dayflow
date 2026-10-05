@@ -5,3 +5,5 @@
 - [x] 3. Drop failed cards from LLM generation context
 - [x] 4. Remove unused unfiltered scheduler copies
 - [x] 5. Add TimelineReplacementPolicyTests
+- [x] 6. Migrate/cleanup already-stored historical Processing failed duplicates
+

@@ -10,12 +10,21 @@ on:
 # job here — Darwin-only app sources would go red. Linux `swift test` for
 # dayflow-cli lives on the CLI test-suite workflow:
 #   .github/workflows/cli.yml  (PR #7, branch prax/cli-test-suite-6fc7)
+#
+# Dayflow.xcodeproj is objectVersion 77 (Xcode 16+; LastUpgradeCheck 1620).
+# macos-14 defaults to Xcode 15.4, which cannot open that format.
 
 jobs:
   unit-tests:
-    runs-on: macos-14
+    runs-on: macos-15
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
     steps:
       - uses: actions/checkout@v4
+      - name: Select Xcode 16.4
+        run: |
+          sudo xcode-select -s "$DEVELOPER_DIR"
+          xcodebuild -version
       - name: Run DayflowTests
         run: |
           xcodebuild test \

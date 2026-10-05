@@ -34,6 +34,7 @@ codexeval/
 
 # Dayflow CLI SwiftPM artifacts
 tools/dayflow-cli/.build/
+tools/dayflow-cli/tests/__pycache__/
 tools/dayflow-cli/fixtures/chunks.sqlite
 tools/dayflow-cli/fixtures/chunks.sqlite-wal
 tools/dayflow-cli/fixtures/chunks.sqlite-shm

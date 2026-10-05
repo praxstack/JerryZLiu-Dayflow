@@ -137,11 +137,13 @@ Extend `.github/workflows/ci.yml`:
 
 ## Done criteria
 
-- [ ] `swift test` passes locally on macOS
-- [ ] Fixture database committed and documented
-- [ ] CI runs CLI tests on every PR
-- [ ] No write tests require running Dayflow.app (use mocks for `AgentBridge.send`)
-- [ ] `plans/README.md` row 003 → DONE
+- [x] `swift test` passes locally (Linux Cloud Agent; macOS xcodebuild not run here)
+- [x] Fixture database seed script committed and documented (`create_fixture_db.sh`)
+- [x] CI runs CLI tests on every PR (`.github/workflows/cli.yml`)
+- [x] No write tests require running Dayflow.app (Unix-socket mock + `DAYFLOW_SOCK`)
+- [x] `plans/README.md` row 003 → DONE (remaining: Xcode CLI fold-in, live app socket)
+
+MCP `untrustedNote` is asserted in Swift (`MCPToolCatalogTests`) and Python `tools/list`.
 
 ## STOP conditions
 

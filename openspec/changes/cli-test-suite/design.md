@@ -2,23 +2,24 @@
 
 ## What this change actually ships
 
-CLI test coverage toward plan 003:
+CLI test coverage for plan 003:
 
 - `DayflowCLICore` library: DayBoundary, Database (read-only SQLite), Queries,
-  JSON envelope builders (`JSONOut.timelineEnvelope`)
-- XCTest: DayBoundary, JSONOut keys, `fetchActivities` against the committed
-  fixture generator
-- Python subprocess tests for `timeline --json` and MCP `tools/list`
+  JSON envelopes, MCP `untrustedNote`, AgentBridge Unix-socket client
+- XCTest: DayBoundary, JSONOut, Queries, MCP catalog, bridge protocol, in-process
+  Unix-socket mock (`DAYFLOW_SOCK`)
+- Python subprocess tests for `timeline --json`, MCP `tools/list` including
+  `untrustedNote`, write tools gated on `DAYFLOW_EDITS_ENABLED`, and a mock
+  Unix-socket `create_category` → `category_add` round trip
 - GitHub workflow `.github/workflows/cli.yml` on Ubuntu with Swift **6.3.3**
-  (aligned with the Cloud Agent image; previously pinned 6.0.3)
 
 `printJSON` / `failJSON` stay in the executable because they call `fail()` and
 `exit`.
 
 ## What this does not ship
 
-- Mocked write-tool / Unix-socket integration tests
 - Folding the CLI into the Xcode app target (plan 002 option A)
+- Live Dayflow.app socket tests (out of scope; mocks only)
 - `xcodebuild` (not available in this Linux environment)
 
 ## Verification (this environment)

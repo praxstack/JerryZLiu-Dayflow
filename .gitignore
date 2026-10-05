@@ -40,3 +40,8 @@ tools/dayflow-cli/fixtures/chunks.sqlite-shm
 
 # Cloud Agent generated binaries
 .cursor/bin/
+.swift-version
+
+# Isolated git worktrees and SDD scratch (not source)
+.worktrees/
+.superpowers/

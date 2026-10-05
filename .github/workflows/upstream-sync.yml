@@ -1,0 +1,22 @@
+name: Upstream sync
+
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/check-upstream-sync.sh"
+      - ".github/workflows/upstream-sync.yml"
+      - "docs/UPSTREAM.md"
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check origin contains JerryZLiu/Dayflow main
+        run: bash scripts/check-upstream-sync.sh

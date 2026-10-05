@@ -5,17 +5,81 @@ enum OpenAICompatiblePreset: String, Codable, CaseIterable {
   case custom
 }
 
+/// Caps how many screenshots a single OpenAI-compatible transcription request may attach.
+enum OpenAICompatibleScreenshotBudget {
+  static let defaultLimit = 15
+  static let minimumLimit = 1
+  static let maximumLimit = 15
+
+  static func clamp(_ value: Int) -> Int {
+    min(maximumLimit, max(minimumLimit, value))
+  }
+
+  /// Evenly samples `items` down to `limit`, always keeping the first and last when possible.
+  static func select<T>(_ items: [T], limit: Int) -> [T] {
+    guard !items.isEmpty else { return [] }
+    let count = min(clamp(limit), items.count)
+    if count == 1 { return [items[0]] }
+    return (0..<count).map { index in
+      items[index * (items.count - 1) / (count - 1)]
+    }
+  }
+}
+
+/// Pulls a gateway's `error.message` out of an HTTP body so setup tests can show it.
+enum OpenAICompatibleHTTPErrorFormatter {
+  static func userMessage(statusCode: Int, body: Data) -> String {
+    if let extracted = extractMessage(from: body), !extracted.isEmpty {
+      return "HTTP \(statusCode): \(extracted)"
+    }
+    let text = String(data: body, encoding: .utf8)?
+      .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    return text.isEmpty ? "HTTP \(statusCode)" : "HTTP \(statusCode): \(text)"
+  }
+
+  static func extractMessage(from body: Data) -> String? {
+    guard let object = try? JSONSerialization.jsonObject(with: body) else { return nil }
+    return extractMessage(from: object)
+  }
+
+  private static func extractMessage(from object: Any) -> String? {
+    guard let dict = object as? [String: Any] else { return nil }
+    if let error = dict["error"] {
+      if let nested = error as? [String: Any], let message = nested["message"] as? String {
+        let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+      }
+      if let message = error as? String {
+        let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+      }
+    }
+    if let message = dict["message"] as? String {
+      let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
+      return trimmed.isEmpty ? nil : trimmed
+    }
+    return nil
+  }
+}
+
 struct OpenAICompatibleConfiguration: Codable, Equatable {
   static let openRouterBaseURL = "https://openrouter.ai/api/v1"
 
   let preset: OpenAICompatiblePreset
   let baseURL: String
   let modelID: String
+  let maxImagesPerRequest: Int
 
-  init(preset: OpenAICompatiblePreset, baseURL: String, modelID: String) {
+  init(
+    preset: OpenAICompatiblePreset,
+    baseURL: String,
+    modelID: String,
+    maxImagesPerRequest: Int = OpenAICompatibleScreenshotBudget.defaultLimit
+  ) {
     self.preset = preset
     self.baseURL = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
     self.modelID = modelID.trimmingCharacters(in: .whitespacesAndNewlines)
+    self.maxImagesPerRequest = OpenAICompatibleScreenshotBudget.clamp(maxImagesPerRequest)
   }
 
   static func openRouter(modelID: String = "") -> OpenAICompatibleConfiguration {
@@ -32,6 +96,37 @@ struct OpenAICompatibleConfiguration: Codable, Equatable {
 
   var isComplete: Bool {
     !baseURL.isEmpty && !modelID.isEmpty && chatCompletionsURL != nil
+  }
+
+  enum CodingKeys: String, CodingKey {
+    case preset
+    case baseURL
+    case modelID
+    case maxImagesPerRequest
+  }
+
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    let preset = try container.decode(OpenAICompatiblePreset.self, forKey: .preset)
+    let baseURL = try container.decode(String.self, forKey: .baseURL)
+    let modelID = try container.decode(String.self, forKey: .modelID)
+    let rawMaxImages =
+      try container.decodeIfPresent(Int.self, forKey: .maxImagesPerRequest)
+      ?? OpenAICompatibleScreenshotBudget.defaultLimit
+    self.init(
+      preset: preset,
+      baseURL: baseURL,
+      modelID: modelID,
+      maxImagesPerRequest: rawMaxImages
+    )
+  }
+
+  func encode(to encoder: Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(preset, forKey: .preset)
+    try container.encode(baseURL, forKey: .baseURL)
+    try container.encode(modelID, forKey: .modelID)
+    try container.encode(maxImagesPerRequest, forKey: .maxImagesPerRequest)
   }
 }
 
@@ -73,6 +168,7 @@ struct OpenAICompatibleRuntimeConfiguration: Sendable {
   let modelID: String
   let bearerToken: String?
   let analyticsProvider: String
+  let maxImagesPerRequest: Int
 
   init(
     configuration: OpenAICompatibleConfiguration,
@@ -81,6 +177,7 @@ struct OpenAICompatibleRuntimeConfiguration: Sendable {
   ) {
     endpoint = configuration.baseURL
     modelID = configuration.modelID
+    maxImagesPerRequest = configuration.maxImagesPerRequest
 
     let trimmedToken = bearerToken?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     self.bearerToken = trimmedToken.isEmpty ? nil : trimmedToken

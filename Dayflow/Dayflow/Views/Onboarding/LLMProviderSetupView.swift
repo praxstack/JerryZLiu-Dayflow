@@ -504,6 +504,26 @@ struct LLMProviderSetupView: View {
                     setupState.testSuccessful = false
                   }
 
+                  VStack(alignment: .leading, spacing: 6) {
+                    Text("Max images per request")
+                      .font(.custom("Figtree", size: 12))
+                      .fontWeight(.semibold)
+                      .foregroundColor(SettingsStyle.secondary)
+                    TextField(
+                      "15",
+                      value: $setupState.openAICompatibleMaxImages,
+                      format: .number
+                    )
+                    .textFieldStyle(.roundedBorder)
+                    .frame(maxWidth: 120)
+                    Text(
+                      "Some gateways allow fewer than 15 images per request. Dayflow samples each batch down to this limit (1–15)."
+                    )
+                    .font(.custom("Figtree", size: 11))
+                    .foregroundColor(SettingsStyle.meta)
+                    .fixedSize(horizontal: false, vertical: true)
+                  }
+
                   LocalLLMTestView(
                     baseURL: $setupState.openAICompatibleBaseURL,
                     modelId: $setupState.openAICompatibleModelID,
@@ -783,9 +803,11 @@ struct LLMProviderSetupView: View {
     let configuration = OpenAICompatibleConfiguration(
       preset: setupState.openAICompatiblePreset,
       baseURL: setupState.openAICompatibleBaseURL,
-      modelID: setupState.openAICompatibleModelID
+      modelID: setupState.openAICompatibleModelID,
+      maxImagesPerRequest: setupState.openAICompatibleMaxImages
     )
     guard configuration.isComplete else { return false }
+    setupState.openAICompatibleMaxImages = configuration.maxImagesPerRequest
 
     let key = setupState.openAICompatibleAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
     let previousKey = KeychainManager.shared.retrieve(

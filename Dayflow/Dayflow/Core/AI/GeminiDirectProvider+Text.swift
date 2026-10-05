@@ -3,7 +3,10 @@ import Foundation
 extension GeminiDirectProvider {
   // MARK: - Text Generation
 
-  func generateText(prompt: String, maxOutputTokens: Int = 8192) async throws
+  func generateText(
+    prompt: String,
+    maxOutputTokens: Int = OllamaProvider.resolvedMaxOutputTokens(fallback: 8192)
+  ) async throws
     -> (text: String, log: LLMCall)
   {
     let callStart = Date()

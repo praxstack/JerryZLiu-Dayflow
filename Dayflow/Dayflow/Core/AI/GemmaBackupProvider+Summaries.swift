@@ -131,7 +131,7 @@ extension GemmaBackupProvider {
           operation: "gemma.generate_summary",
           batchId: batchId,
           temperature: 0.3,
-          maxOutputTokens: 1024,
+          maxOutputTokens: OllamaProvider.resolvedMaxOutputTokens(fallback: 1024),
           logRequestBody: true
         )
 
@@ -250,7 +250,7 @@ extension GemmaBackupProvider {
           operation: "gemma.generate_title",
           batchId: batchId,
           temperature: 0.3,
-          maxOutputTokens: 256,
+          maxOutputTokens: OllamaProvider.resolvedMaxOutputTokens(fallback: 256),
           logRequestBody: true
         )
 
@@ -311,7 +311,7 @@ extension GemmaBackupProvider {
           operation: "gemma.merge_check",
           batchId: batchId,
           temperature: 0.2,
-          maxOutputTokens: 256,
+          maxOutputTokens: OllamaProvider.resolvedMaxOutputTokens(fallback: 256),
           logRequestBody: true
         )
 
@@ -366,7 +366,7 @@ extension GemmaBackupProvider {
           operation: "gemma.merge_cards",
           batchId: batchId,
           temperature: 0.2,
-          maxOutputTokens: 512,
+          maxOutputTokens: OllamaProvider.resolvedMaxOutputTokens(fallback: 512),
           logRequestBody: true
         )
 

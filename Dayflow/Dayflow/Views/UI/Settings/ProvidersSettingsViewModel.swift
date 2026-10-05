@@ -46,6 +46,9 @@ final class ProvidersSettingsViewModel: ObservableObject {
   @Published var localTestBaseURL = ""
   @Published var localTestModelID = ""
   @Published var localTestAPIKey = ""
+  @Published var localMaxOutputTokensText = String(OllamaProvider.defaultMaxOutputTokens)
+  @Published var isLocalMaxOutputTokensSaved = true
+  @Published var localMaxOutputTokensValidationMessage: String?
   @Published var showLocalModelUpgradeBanner = false
   @Published var isShowingLocalModelUpgradeSheet = false
   @Published var upgradeStatusMessage: String?
@@ -151,6 +154,7 @@ final class ProvidersSettingsViewModel: ObservableObject {
     localTestBaseURL = localBaseURL
     localTestModelID = localModelId
     localTestAPIKey = localAPIKey
+    loadLocalMaxOutputTokensFromDefaults()
 
     if let configuration = OpenAICompatiblePreferences.load() {
       openAICompatiblePreset = configuration.preset
@@ -223,6 +227,7 @@ final class ProvidersSettingsViewModel: ObservableObject {
     localTestBaseURL = localBaseURL
     localTestModelID = localModelId
     localTestAPIKey = localAPIKey
+    loadLocalMaxOutputTokensFromDefaults()
     LocalModelPreferences.syncPreset(for: localEngine, modelId: localModelId)
   }
 
@@ -303,6 +308,60 @@ final class ProvidersSettingsViewModel: ObservableObject {
     } else {
       UserDefaults.standard.set(trimmed, forKey: "llmLocalAPIKey")
     }
+  }
+
+  var hasLocalMaxOutputTokensOverride: Bool {
+    OllamaProvider.storedMaxOutputTokensOverride() != nil
+  }
+
+  var localMaxOutputTokensStatusText: String {
+    if let override = OllamaProvider.storedMaxOutputTokensOverride() {
+      return String(
+        localized: "Override: \(override) tokens. Local, OpenAI-compatible, Gemini, and Gemma calls use this cap."
+      )
+    }
+    return String(
+      localized:
+        "No override. Local and OpenAI-compatible calls use \(OllamaProvider.defaultMaxOutputTokens); Gemini and Gemma keep their own caps until you save a value."
+    )
+  }
+
+  func loadLocalMaxOutputTokensFromDefaults() {
+    if let override = OllamaProvider.storedMaxOutputTokensOverride() {
+      localMaxOutputTokensText = String(override)
+    } else {
+      localMaxOutputTokensText = String(OllamaProvider.defaultMaxOutputTokens)
+    }
+    isLocalMaxOutputTokensSaved = true
+    localMaxOutputTokensValidationMessage = nil
+  }
+
+  func markLocalMaxOutputTokensEdited() {
+    localMaxOutputTokensValidationMessage = nil
+    let trimmed = localMaxOutputTokensText.trimmingCharacters(in: .whitespacesAndNewlines)
+    let savedDisplay =
+      OllamaProvider.storedMaxOutputTokensOverride().map(String.init)
+      ?? String(OllamaProvider.defaultMaxOutputTokens)
+    isLocalMaxOutputTokensSaved = trimmed == savedDisplay
+  }
+
+  func saveLocalMaxOutputTokens() {
+    let trimmed = localMaxOutputTokensText.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard let value = Int(trimmed), value > 0 else {
+      localMaxOutputTokensValidationMessage = String(
+        localized: "Enter a positive whole number.")
+      isLocalMaxOutputTokensSaved = false
+      return
+    }
+    localMaxOutputTokensText = String(value)
+    OllamaProvider.persistMaxOutputTokens(value)
+    isLocalMaxOutputTokensSaved = true
+    localMaxOutputTokensValidationMessage = nil
+  }
+
+  func resetLocalMaxOutputTokens() {
+    OllamaProvider.persistMaxOutputTokens(nil)
+    loadLocalMaxOutputTokensFromDefaults()
   }
 
   var currentProvider: LLMProviderID { routing.primary }

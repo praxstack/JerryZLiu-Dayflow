@@ -62,7 +62,7 @@ extension GemmaBackupProvider {
       operation: "gemma.describe_frames",
       batchId: batchId,
       temperature: 0.2,
-      maxOutputTokens: 2048,
+      maxOutputTokens: OllamaProvider.resolvedMaxOutputTokens(fallback: 2048),
       logRequestBody: false
     )
 
@@ -95,7 +95,7 @@ extension GemmaBackupProvider {
         operation: "gemma.describe_frames",
         batchId: batchId,
         temperature: 0.2,
-        maxOutputTokens: 2048,
+        maxOutputTokens: OllamaProvider.resolvedMaxOutputTokens(fallback: 2048),
         logRequestBody: false
       )
 
@@ -159,7 +159,7 @@ extension GemmaBackupProvider {
           operation: "gemma.segment_frames",
           batchId: batchId,
           temperature: 0.2,
-          maxOutputTokens: 2048,
+          maxOutputTokens: OllamaProvider.resolvedMaxOutputTokens(fallback: 2048),
           logRequestBody: true
         )
 

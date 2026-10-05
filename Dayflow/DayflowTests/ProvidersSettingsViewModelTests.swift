@@ -9,6 +9,7 @@ final class ProvidersSettingsViewModelTests: XCTestCase {
     "llmLocalBaseURL",
     "llmLocalModelId",
     "llmLocalAPIKey",
+    OllamaProvider.maxOutputTokensDefaultsKey,
     "localSetupComplete",
     "chatGPTPromptOverrides",
     "claudePromptOverrides",
@@ -177,5 +178,77 @@ final class ProvidersSettingsViewModelTests: XCTestCase {
     XCTAssertEqual(viewModel.agentTitlePromptText, ClaudePromptDefaults.titleBlock)
     XCTAssertTrue(ClaudePromptPreferences.load().isEmpty)
     XCTAssertEqual(CodexPromptPreferences.load(), codexOverrides)
+  }
+
+  func testLocalMaxOutputTokensSaveWritesTheResolverKey() {
+    UserDefaults.standard.removeObject(forKey: OllamaProvider.maxOutputTokensDefaultsKey)
+    let viewModel = ProvidersSettingsViewModel()
+    XCTAssertEqual(
+      viewModel.localMaxOutputTokensText, String(OllamaProvider.defaultMaxOutputTokens))
+    XCTAssertFalse(viewModel.hasLocalMaxOutputTokensOverride)
+    XCTAssertTrue(viewModel.isLocalMaxOutputTokensSaved)
+
+    viewModel.localMaxOutputTokensText = "32000"
+    viewModel.markLocalMaxOutputTokensEdited()
+    XCTAssertFalse(viewModel.isLocalMaxOutputTokensSaved)
+
+    viewModel.saveLocalMaxOutputTokens()
+
+    XCTAssertTrue(viewModel.isLocalMaxOutputTokensSaved)
+    XCTAssertNil(viewModel.localMaxOutputTokensValidationMessage)
+    XCTAssertEqual(
+      UserDefaults.standard.integer(forKey: OllamaProvider.maxOutputTokensDefaultsKey), 32000)
+    XCTAssertEqual(OllamaProvider.resolvedMaxOutputTokens(), 32000)
+    XCTAssertEqual(
+      OllamaProvider.resolvedMaxOutputTokens(fallback: 2048), 32000)
+    XCTAssertTrue(viewModel.hasLocalMaxOutputTokensOverride)
+  }
+
+  func testLocalMaxOutputTokensResetClearsTheResolverKey() {
+    UserDefaults.standard.set(32000, forKey: OllamaProvider.maxOutputTokensDefaultsKey)
+    let viewModel = ProvidersSettingsViewModel()
+    XCTAssertEqual(viewModel.localMaxOutputTokensText, "32000")
+    XCTAssertTrue(viewModel.hasLocalMaxOutputTokensOverride)
+
+    viewModel.resetLocalMaxOutputTokens()
+
+    XCTAssertNil(UserDefaults.standard.object(forKey: OllamaProvider.maxOutputTokensDefaultsKey))
+    XCTAssertEqual(OllamaProvider.resolvedMaxOutputTokens(), OllamaProvider.defaultMaxOutputTokens)
+    XCTAssertEqual(
+      viewModel.localMaxOutputTokensText, String(OllamaProvider.defaultMaxOutputTokens))
+    XCTAssertFalse(viewModel.hasLocalMaxOutputTokensOverride)
+    XCTAssertTrue(viewModel.isLocalMaxOutputTokensSaved)
+  }
+
+  func testInvalidLocalMaxOutputTokensDoesNotWriteDefaults() {
+    UserDefaults.standard.set(8000, forKey: OllamaProvider.maxOutputTokensDefaultsKey)
+    let viewModel = ProvidersSettingsViewModel()
+
+    viewModel.localMaxOutputTokensText = "0"
+    viewModel.saveLocalMaxOutputTokens()
+    XCTAssertEqual(
+      UserDefaults.standard.integer(forKey: OllamaProvider.maxOutputTokensDefaultsKey), 8000)
+    XCTAssertEqual(OllamaProvider.resolvedMaxOutputTokens(), 8000)
+    XCTAssertNotNil(viewModel.localMaxOutputTokensValidationMessage)
+
+    viewModel.localMaxOutputTokensText = "abc"
+    viewModel.saveLocalMaxOutputTokens()
+    XCTAssertEqual(
+      UserDefaults.standard.integer(forKey: OllamaProvider.maxOutputTokensDefaultsKey), 8000)
+    XCTAssertEqual(OllamaProvider.resolvedMaxOutputTokens(), 8000)
+
+    viewModel.localMaxOutputTokensText = "-12"
+    viewModel.saveLocalMaxOutputTokens()
+    XCTAssertEqual(
+      UserDefaults.standard.integer(forKey: OllamaProvider.maxOutputTokensDefaultsKey), 8000)
+  }
+
+  func testReloadLocalProviderSettingsPicksUpMaxOutputTokensOverride() {
+    let viewModel = ProvidersSettingsViewModel()
+    UserDefaults.standard.set(16000, forKey: OllamaProvider.maxOutputTokensDefaultsKey)
+    viewModel.reloadLocalProviderSettings()
+    XCTAssertEqual(viewModel.localMaxOutputTokensText, "16000")
+    XCTAssertTrue(viewModel.hasLocalMaxOutputTokensOverride)
+    XCTAssertEqual(OllamaProvider.resolvedMaxOutputTokens(), 16000)
   }
 }

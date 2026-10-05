@@ -276,7 +276,7 @@ extension GeminiDirectProvider {
     ]
 
     let generationConfig: [String: Any] = [
-      "maxOutputTokens": 65536,
+      "maxOutputTokens": OllamaProvider.resolvedMaxOutputTokens(fallback: 65536),
       "mediaResolution": "MEDIA_RESOLUTION_HIGH",
       "responseMimeType": "application/json",
       "responseSchema": transcriptionSchema,

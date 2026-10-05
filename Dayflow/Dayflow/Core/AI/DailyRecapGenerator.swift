@@ -70,7 +70,9 @@ enum DailyRecapGeneratorError: LocalizedError {
 final class DailyRecapGenerator {
   static let shared = DailyRecapGenerator()
 
-  private static let localRecapMaxOutputTokens = 8192
+  private static var localRecapMaxOutputTokens: Int {
+    OllamaProvider.resolvedMaxOutputTokens(fallback: 8192)
+  }
 
   private static let localPrompt = """
     # Daily Recap Prompt

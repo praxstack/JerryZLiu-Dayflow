@@ -1,35 +1,27 @@
 # Design
 
-## Context
-Implement plans/001 CI baseline without silently disabling tests.
+## What this change actually ships
 
-## Goals / Non-Goals
-- Goals: ship a focused, reviewable change that can merge independently of other overnight PRs.
-- Non-goals: rewriting the macOS app UI, adding MCP servers, merging to main.
+Plan 001 verification baseline:
 
-## Decisions
-- Single macos-14 job as in plans/001.
-- README subsection under Contributing.
+- `.github/workflows/ci.yml` `unit-tests` job on `macos-14` runs
+  `xcodebuild test -only-testing:DayflowTests` and `swift build` for the CLI.
+  That job uses Xcode's Swift. There is **no** `setup-swift` 6.0.3 pin on this
+  workflow (PE note). The 6.0.3 pin lived on `.github/workflows/cli.yml` and
+  is aligned to **6.3.3** on the CLI-tests PR, matching the Cloud Agent image.
 
-## Design review loop
+README Contributing documents the xcodebuild one-liner and that xcodebuild is
+macOS-only.
 
-### Principal engineer (round 1)
-Follow the plan YAML closely. Do not add continue-on-error. UITests stay out of v1.
+## What this does not ship
 
-### Senior principal engineer (round 1)
-macos-14 minutes are costly but required for xcodebuild. A second Linux job would conflict with the CLI-tests PR; keep this workflow to the plan's macos job plus CLI build on the same runner (Xcode includes Swift).
+- A Linux `swift build` job on this branch. This tree still `import Darwin`s
+  in `AgentUsageTelemetry.swift`, so an ubuntu-24.04 job would be red until
+  the Darwin/Glibc telemetry from the CLI PR lands.
+- DayflowUITests in CI
+- `swift test` for the CLI (owned by the CLI-tests PR)
+- Running xcodebuild in this Linux Cloud Agent image
 
-### Second senior principal engineer (round 2)
-Approve. Linux swift test belongs in a separate workflow file owned by the CLI-tests change.
+## Verification (this environment)
 
-### Decision
-Approved. Workflow file is ci.yml only.
-
-## Risks / Trade-offs
-First run may fail if existing tests are red — that is a reported outcome, not a reason to skip tests.
-
-## Migration Plan
-None. Additive on a feature branch.
-
-## Open Questions
-None remaining for this scoped change.
+`swift --version` here is 6.3.3. YAML parses. `xcodebuild` cannot run here.

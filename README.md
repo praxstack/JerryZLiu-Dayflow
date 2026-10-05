@@ -146,6 +146,10 @@ xcodebuild test -project Dayflow/Dayflow.xcodeproj -scheme Dayflow \
 cd tools/dayflow-cli && swift build
 ```
 
+`xcodebuild` is macOS-only. Linux Cloud Agents use Swift 6.3.3; the CLI Linux
+job lives on `.github/workflows/cli.yml` (this branch's CLI still needs Darwin
+imports that do not compile on Linux).
+
 ## License
 
 Dayflow is licensed under the MIT License.

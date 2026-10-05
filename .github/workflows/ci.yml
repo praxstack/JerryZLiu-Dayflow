@@ -32,6 +32,9 @@ jobs:
             -scheme Dayflow \
             -destination 'platform=macOS' \
             -only-testing:DayflowTests \
-            -resultBundlePath TestResults
+            -resultBundlePath TestResults \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGN_IDENTITY=- \
+            DEVELOPMENT_TEAM=
       - name: Build dayflow-cli
         run: cd tools/dayflow-cli && swift build

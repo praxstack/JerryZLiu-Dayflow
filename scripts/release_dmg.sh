@@ -143,7 +143,12 @@ if [[ -d "${SPARKLE_DIR}" ]]; then
     # x86_64 slice serves no purpose here and triggers macOS's "Support
     # Ending for Intel-based Apps" deprecation warning on Apple Silicon.
     if lipo -info "${SPARKLE_DIR}/Autoupdate" 2>/dev/null | grep -q x86_64; then
-      lipo -thin arm64 "${SPARKLE_DIR}/Autoupdate" -output "${SPARKLE_DIR}/Autoupdate"
+      # lipo cannot safely use the same path as input and output; it can
+      # truncate or refuse the file. Write a temp then replace.
+      thin_out="$(mktemp "${TMPDIR:-/tmp}/Autoupdate.arm64.XXXXXX")"
+      lipo -thin arm64 "${SPARKLE_DIR}/Autoupdate" -output "${thin_out}"
+      mv -f "${thin_out}" "${SPARKLE_DIR}/Autoupdate"
+      chmod +x "${SPARKLE_DIR}/Autoupdate"
     fi
     codesign -vvv --force -o runtime --sign "${SIGN_ID}" \
       "${SPARKLE_DIR}/Autoupdate"

@@ -1,34 +1,39 @@
 # Design
 
-## Context
-Characterization tests only; do not extract a shared SPM kernel in this PR (that is a later, larger change).
+## What this change actually ships
 
-## Goals / Non-Goals
-- Goals: ship a focused, reviewable change that can merge independently of other overnight PRs.
-- Non-goals: rewriting the macOS app UI, adding MCP servers, merging to main.
+A shared Foundation-only calendar kernel used by both the macOS app and
+`dayflow-cli`:
 
-## Decisions
-- XCTest in Dayflow/DayflowTests/StorageDateHelpersTests.swift and WeeklyDateRangeBoundaryTests.swift.
+- Source of truth: `Dayflow/Dayflow/Core/Shared/DayflowCalendar.swift`
+- Linux/SwiftPM tests: `tools/dayflow-kernel` (path-depends on that folder)
+- CLI `DayBoundary.swift` / `Categories.swift` are wrappers, not copies
+- App `StorageDateHelpers.getDayInfoFor4AMBoundary` and
+  `WeeklyDateRange.containing` delegate to the same types
 
-## Design review loop
+Week windows use the app's Monday-first Gregorian calendar
+(`firstWeekday = 2`, `minimumDaysInFirstWeek = 4`, `yearForWeekOfYear`) so
+CLI timeline queries cannot drift from the weekly UI. The old CLI
+weekday-arithmetic copy is gone.
 
-### Principal engineer (round 1)
-PE: extracting a kernel now would touch CLI and app simultaneously and fight the CLI-tests PR. Tests-first is the plan's step 1.
+## What this does not ship
 
-### Senior principal engineer (round 1)
-SPE: use Calendar.current like production so tests match StorageDateHelpers. Document TZ coupling.
+- The CLI is not an Xcode target (plan 002 option A). Option B is the
+  interim SwiftPM package.
+- `xcodebuild` / `DayflowCalendarKernelTests` cannot be executed in this
+  Linux Cloud Agent image. Those XCTest files are for macOS CI.
+- CategoryStore write-path / UI is unchanged; only the CLI read-path list
+  is shared.
 
-### Second senior principal engineer (round 2)
-2nd SPE: approve. Keep tests in Dayflow/DayflowTests so the synchronized Xcode group picks them up.
+## Risks
 
-### Decision
-Approved. Deferred shared kernel extraction.
+- App `DateFormatter.yyyyMMdd` still has no `en_US_POSIX` locale; kernel
+  day keys do. Keys remain `yyyy-MM-dd` and should match.
+- `tools/*` is gitignored except `dayflow-cli` and now `dayflow-kernel`.
 
-## Risks / Trade-offs
-Tests use Calendar.current; CI macos-14 TZ is UTC, still internally consistent.
+## Verification (this environment)
 
-## Migration Plan
-None. Additive on a feature branch.
-
-## Open Questions
-None remaining for this scoped change.
+```
+swift test --package-path tools/dayflow-kernel
+swift build --package-path tools/dayflow-cli
+```

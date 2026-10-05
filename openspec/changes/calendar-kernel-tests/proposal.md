@@ -1,18 +1,22 @@
 # Proposal
 
 ## Why
-App and CLI duplicate 4 AM day/week rules. Before extracting a shared kernel (plans/002), lock current app behavior with characterization tests.
+The bundled CLI copied 4 AM day/week logic from the app. If those copies
+drift, MCP/agent queries return the wrong Dayflow day. plans/002 wants one
+kernel.
 
 ## What Changes
-- Add DayflowTests for Date.getDayInfoFor4AMBoundary before/after 4 AM.
-- Add DayflowTests for WeeklyDateRange Monday-before-4 AM week roll.
+- Extract `DayflowCalendar` / `DayflowCategories` into Shared sources.
+- Point CLI and app wrappers at that kernel.
+- Add Linux SwiftPM tests plus XCTest files for macOS.
 
 ## Capabilities
 
 ### New Capabilities
-- `calendar-boundaries`: Dayflow days start at 04:00 and weeks start Monday 04:00.
+- `calendar-boundaries`: Dayflow days start at 04:00 and weeks start Monday 04:00, from one implementation.
 
 ### Modified Capabilities
 
 ## Impact
-Dayflow/DayflowTests only. No production logic change (characterization).
+App date helpers, weekly range, CLI DayBoundary/Categories, new
+`tools/dayflow-kernel` package.

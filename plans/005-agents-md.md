@@ -17,6 +17,7 @@
 - **Depends on**: none
 - **Category**: dx
 - **Planned at**: commit `274c059`, 2026-08-29
+- **Landed**: root AGENTS.md + README link (prax/agents-md-6fc7)
 
 ## Why this matters
 

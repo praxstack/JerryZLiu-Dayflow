@@ -43,9 +43,9 @@ RUN curl -fsSL https://download.swift.org/swiftly/linux/swiftly-$(uname -m).tar.
       | tar xz -C /tmp \
     && /tmp/swiftly init --no-modify-profile --skip-install --assume-yes \
     && /opt/swiftly/bin/swiftly install --use 6.3.3 \
-    && ln -sf /opt/swiftly/bin/swift /usr/local/bin/swift \
-    && ln -sf /opt/swiftly/bin/swiftc /usr/local/bin/swiftc \
+    && ln -sf /opt/swiftly/toolchains/6.3.3/usr/bin/swift /usr/local/bin/swift \
+    && ln -sf /opt/swiftly/toolchains/6.3.3/usr/bin/swiftc /usr/local/bin/swiftc \
     && ln -sf /opt/swiftly/bin/swiftly /usr/local/bin/swiftly \
-    && rm -rf /tmp/swiftly
+    && rm -rf /tmp/swiftly /tmp/.swift-version /.swift-version
 
 USER ubuntu

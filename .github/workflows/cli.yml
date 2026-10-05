@@ -22,8 +22,8 @@ jobs:
       SWIFT_VERSION: "6.3.3"
     steps:
       - uses: actions/checkout@v4
-      - name: Install SQLite
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libsqlite3-dev sqlite3
+      - name: Install SQLite and Swift toolchain deps
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libsqlite3-dev sqlite3 libcurl4-openssl-dev
       - name: Install Swift ${{ env.SWIFT_VERSION }} via Swiftly
         run: |
           set -euo pipefail

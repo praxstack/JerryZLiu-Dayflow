@@ -1,35 +1,30 @@
 # Design
 
-## Context
-Keep filtering/truncation inside makeCardsText so every provider path is covered.
+## What this change actually ships
 
-## Goals / Non-Goals
-- Goals: ship a focused, reviewable change that can merge independently of other overnight PRs.
-- Non-goals: rewriting the macOS app UI, adding MCP servers, merging to main.
+Two layers for JerryZLiu/Dayflow#285 (tens of thousands of "Processing failed"
+cards overflowing Daily recap):
 
-## Decisions
-- Filter title == Processing failed.
-- maxCharacters default 60_000, injectable for tests.
+1. **Stop creating the stack.** `replaceTimelineCardsInRange` used to preserve
+   `category = System` cards from other batches. Overlapping failed batches
+   therefore kept every previous error card and inserted a new one. Failed
+   cards (`title = Processing failed`) in the replacement window are now
+   always soft-deleted, regardless of `batch_id`. Policy:
+   `TimelineReplacementPolicy.shouldSoftDeleteCard` / `replaceableCardsSQLPredicate`.
+2. **Stop feeding them to models.** Generation context and recap `makeCardsText`
+   drop those cards; recap input is still capped at 60k characters.
 
-## Design review loop
+Dead unfiltered `makeCardsText` copies in `DailyRecapScheduler` were removed
+so they cannot be wired up again.
 
-### Principal engineer (round 1)
-PE: 60k chars is a rough token ceiling, not a tokenizer. Good enough vs 92k duplicate failed cards.
+## What this does not ship
 
-### Senior principal engineer (round 1)
-SPE: preserve String(localized:) empty-state from current main. Filter before sort. Do not change attempt budget (already shipped).
+- Deduping already-stored historical failed cards (no migration)
+- Changing Ollama/Gemma sliding-window `allCards = existingCards` rewrite
+  (needed so lookback cards are not dropped on replace)
+- `xcodebuild` in this Linux environment
 
-### Second senior principal engineer (round 2)
-Approve. Tests live in Dayflow/DayflowTests so they compile.
+## Verification
 
-### Decision
-Approved.
-
-## Risks / Trade-offs
-Title-based filter is brittle if the app localizes that title; match current English failure title used in storage.
-
-## Migration Plan
-None. Additive on a feature branch.
-
-## Open Questions
-None remaining for this scoped change.
+`Dayflow/DayflowTests/TimelineReplacementPolicyTests.swift`
+`DayflowTests/DailyRecapGeneratorTests.testMakeCardsTextDropsProcessingFailedAndCapsLength`

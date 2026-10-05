@@ -5,6 +5,16 @@ Daily recap prompts MUST NOT be dominated by failed conversion cards or unbounde
 
 ## ADDED Requirements
 
+### Requirement: Overlapping failed cards are replaced
+replaceTimelineCardsInRange MUST soft-delete live cards titled
+"Processing failed" that overlap the replacement window, regardless of
+batch_id. Other System cards from other batches MAY remain.
+
+#### Scenario: Second overlapping failure
+- **WHEN** batch 2 replaces a window that already contains batch 1's
+  "Processing failed" card
+- **THEN** the batch 1 failed card is soft-deleted and does not stack
+
 ### Requirement: Failed conversion cards are omitted
 makeCardsText MUST omit cards whose title is "Processing failed".
 

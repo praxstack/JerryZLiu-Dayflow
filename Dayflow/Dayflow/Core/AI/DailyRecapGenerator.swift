@@ -237,7 +237,7 @@ final class DailyRecapGenerator {
     day: String, cards: [TimelineCard], maxCharacters: Int = recapCardsTextMaxCharacters
   ) -> String {
     let ordered = cards
-      .filter { $0.title != "Processing failed" }
+      .filter { $0.title != TimelineReplacementPolicy.processingFailedTitle }
       .sorted { lhs, rhs in
         if lhs.startTimestamp == rhs.startTimestamp {
           return lhs.endTimestamp < rhs.endTimestamp

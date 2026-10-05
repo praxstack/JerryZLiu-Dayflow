@@ -80,6 +80,31 @@ final class DailyRecapGeneratorTests: XCTestCase {
     XCTAssertEqual(consumed, ["2026-05-28", "2026-05-27"])
   }
 
+  func testMakeCardsTextDropsProcessingFailedAndCapsLength() {
+    let failed = TimelineCard(
+      recordId: nil,
+      batchId: 1,
+      startTimestamp: "9:00 AM",
+      endTimestamp: "9:15 AM",
+      category: "System",
+      subcategory: "Error",
+      title: TimelineReplacementPolicy.processingFailedTitle,
+      summary: "Failed to process",
+      detailedSummary: String(repeating: "x", count: 2000),
+      day: "2026-04-08",
+      distractions: nil,
+      videoSummaryURL: nil,
+      otherVideoSummaryURLs: nil,
+      appSites: nil
+    )
+    let text = DailyRecapGenerator.makeCardsText(
+      day: "2026-04-08",
+      cards: [failed, sampleCard()]
+    )
+    XCTAssertFalse(text.contains(TimelineReplacementPolicy.processingFailedTitle))
+    XCTAssertTrue(text.contains("Shipped prompt updates"))
+  }
+
   private func sampleCard() -> TimelineCard {
     TimelineCard(
       recordId: nil,

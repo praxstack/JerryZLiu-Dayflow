@@ -44,6 +44,12 @@
 			path = Dayflow;
 			sourceTree = "<group>";
 		};
+		DF0F10012F9B0001000000A1 /* DayflowFlow */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			name = DayflowFlow;
+			path = ../tools/flow-kernel/Sources/DayflowFlow;
+			sourceTree = SOURCE_ROOT;
+		};
 		FEFD599FBA059B170B03FA5E /* DayflowTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = DayflowTests;
@@ -86,6 +92,7 @@
 			children = (
 				C4C1D2A32DB56805007D5A55 /* Dayflow */,
 				FEFD599FBA059B170B03FA5E /* DayflowTests */,
+				DF0F10012F9B0001000000A1 /* DayflowFlow */,
 				C4DF00012EFB100000000001 /* Config/Dayflow.xcconfig */,
 				C4C1D2A22DB56805007D5A55 /* Products */,
 			);
@@ -119,6 +126,7 @@
 			);
 			fileSystemSynchronizedGroups = (
 				C4C1D2A32DB56805007D5A55 /* Dayflow */,
+				DF0F10012F9B0001000000A1 /* DayflowFlow */,
 			);
 			name = Dayflow;
 			packageProductDependencies = (

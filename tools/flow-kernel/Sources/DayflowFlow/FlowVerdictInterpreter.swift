@@ -7,9 +7,9 @@
 //  output is treated as on-task / no overlay action so a flaky turn can
 //  never fire a bogus nudge.
 //
-//  Compiled into the macOS app via
-//  `Dayflow/Dayflow/Core/Flow/FlowVerdictInterpreter.swift` (symlink) and
-//  into Linux/SwiftPM tests via tools/flow-kernel.
+//  Compiled into the macOS app via the DayflowFlow PBXFileSystemSynchronizedRootGroup
+//  in Dayflow.xcodeproj (tools/flow-kernel/Sources/DayflowFlow) and into
+//  Linux/SwiftPM tests via this package.
 //
 
 import Foundation

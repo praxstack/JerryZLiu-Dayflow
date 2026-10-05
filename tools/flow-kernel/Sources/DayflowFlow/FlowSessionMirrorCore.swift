@@ -7,6 +7,9 @@
 //  localization, and deadline timers; this is the mockable state machine
 //  plan 004 asked for.
 //
+//  Compiled into the macOS app via the DayflowFlow PBXFileSystemSynchronizedRootGroup
+//  in Dayflow.xcodeproj and into Linux/SwiftPM tests via this package.
+//
 
 import Foundation
 

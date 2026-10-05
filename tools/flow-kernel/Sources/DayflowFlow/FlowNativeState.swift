@@ -6,9 +6,9 @@
 //  UI) owns the real data; the app only keeps enough to drive the desktop
 //  overlay and survive a relaunch mid-session.
 //
-//  Compiled into the macOS app via
-//  `Dayflow/Dayflow/Core/Flow/FlowNativeState.swift` (symlink into this file)
-//  and into Linux/SwiftPM tests via tools/flow-kernel.
+//  Compiled into the macOS app via the DayflowFlow PBXFileSystemSynchronizedRootGroup
+//  in Dayflow.xcodeproj (tools/flow-kernel/Sources/DayflowFlow) and into
+//  Linux/SwiftPM tests via this package.
 //
 
 import Foundation

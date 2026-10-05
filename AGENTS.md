@@ -36,10 +36,11 @@ xcodebuild test -project Dayflow/Dayflow.xcodeproj -scheme Dayflow \
 CLI:
 
 ```bash
-cd tools/dayflow-cli && swift build
+cd tools/dayflow-cli
+swift build
 # after the CLI test-suite lands: swift test
-bash tools/dayflow-cli/fixtures/create_fixture_db.sh
-DAYFLOW_DB=tools/dayflow-cli/fixtures/chunks.sqlite .build/debug/dayflow timeline --json
+bash fixtures/create_fixture_db.sh
+DAYFLOW_DB=fixtures/chunks.sqlite "$(swift build --show-bin-path)/dayflow" timeline --json
 ```
 
 Cloud Agent:
@@ -72,6 +73,5 @@ bash scripts/cloud-agent-verify.sh
 
 - [README.md](README.md)
 - [plans/README.md](plans/README.md)
-- [docs/UPSTREAM.md](docs/UPSTREAM.md) (added on the sync branch)
 - [docs/super-pro-stack.md](docs/super-pro-stack.md)
 - [.agents/README.md](.agents/README.md)

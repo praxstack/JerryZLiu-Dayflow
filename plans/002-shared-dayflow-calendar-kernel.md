@@ -17,6 +17,7 @@
 - **Depends on**: plans/001-ci-verification-baseline.md
 - **Category**: tech-debt
 - **Planned at**: commit `274c059`, 2026-08-29
+- **Landed (partial)**: app characterization tests for 4 AM day + Monday week roll (prax/calendar-kernel-tests-6fc7). Shared kernel extraction still TODO.
 
 ## Why this matters
 

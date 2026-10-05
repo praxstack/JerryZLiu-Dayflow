@@ -1,35 +1,31 @@
 # Design
 
-## Context
-Move jsonObjects(in:) and first-object decode only. Leave Codex process loop and overlay in the agent.
+## What this change actually ships
 
-## Goals / Non-Goals
-- Goals: ship a focused, reviewable change that can merge independently of other overnight PRs.
-- Non-goals: rewriting the macOS app UI, adding MCP servers, merging to main.
+Foundation-only Flow kernel used by the macOS app and by Linux `swift test`:
 
-## Decisions
-- FlowVerdictInterpreter.jsonObjects + parse(reply:).
-- Agent calls interpreter then existing handle(verdict:).
+- `FlowAgentDecision` / `FlowParsedVerdict` / `FlowVerdictInterpreter.parse`
+- `FlowOverlayMapping` for phase overlay events and agent nudge/praise policy
+- `FlowNativeSnapshot` Codable + bridge-payload round-trip tests
 
-## Design review loop
+App sources `Dayflow/Dayflow/Core/Flow/FlowNativeState.swift` and
+`FlowVerdictInterpreter.swift` are symlinks into `tools/flow-kernel`.
+`FlowDistractionAgent` calls `decode` + `interpret`; garbage replies still
+skip `handle` so a flaky turn cannot close an off-task interval.
+`FlowSessionMirror.apply` / `agentNudge` / `agentPraise` / `simulateDistraction`
+consult `FlowOverlayMapping` for overlay policy. Timers and AppKit stay in
+the mirror.
 
-### Principal engineer (round 1)
-PE: do not rewrite the tick loop. Interpreter must be Foundation-only so tests do not import AppKit.
+## What this does not ship
 
-### Senior principal engineer (round 1)
-SPE: nil parse == current 'treating as on-task' path. Keep Verdict fields optional.
+- Live Codex / ScreenCaptureKit tests
+- Rewrite of the tick loop
+- `FlowSessionMirrorTests` with a mock `FlowBridgeForwarding` (optional in
+  plan 004; still TODO — needs `@MainActor` and the shared singleton)
+- `xcodebuild` in this Linux Cloud Agent image
 
-### Second senior principal engineer (round 2)
-Approve with this shrink vs full FlowSessionMirror tests.
+## Verification (this environment)
 
-### Decision
-Approved. Mirror tests deferred.
-
-## Risks / Trade-offs
-Brace scanner still naive for pathological strings — same as today.
-
-## Migration Plan
-None. Additive on a feature branch.
-
-## Open Questions
-None remaining for this scoped change.
+```
+swift test --package-path tools/flow-kernel
+```

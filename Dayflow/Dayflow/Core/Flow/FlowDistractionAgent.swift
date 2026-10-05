@@ -443,14 +443,17 @@ final class FlowDistractionAgent: ObservableObject {
     appendTranscript(reply)
 
     let objects = FlowVerdictInterpreter.jsonObjects(in: reply)
-    guard let verdict = FlowVerdictInterpreter.parse(reply) else {
+    // decode(nil) means garbage: fail-safe on-task / no overlay, and do not
+    // flip lastReportedOffTask (a flaky turn must not close a real incident).
+    guard let verdict = FlowVerdictInterpreter.decode(reply) else {
       print("[FlowAgent] Unparseable reply, treating as on-task: \(reply.prefix(200))")
       return
     }
+    let parsed = FlowVerdictInterpreter.interpret(verdict)
     // The verdict comes first and is acted on first; the timeline (when the
     // tick asked for one) rides behind it in a second object.
-    handle(verdict: verdict)
-    timeline.observe(offTask: verdict.status == "off_task", front: front, reason: verdict.reason)
+    handle(parsed)
+    timeline.observe(offTask: parsed.isOffTask, front: front, reason: parsed.reason)
     if askedTimeline { readBackTimeline(fallback: Array(objects.dropFirst())) }
   }
 
@@ -483,18 +486,17 @@ final class FlowDistractionAgent: ObservableObject {
     return (try? decoder.decode(TimelineReply.self, from: data))?.timeline
   }
 
-  private func handle(verdict: FlowVerdictInterpreter.Verdict) {
-    let offTask = verdict.status == "off_task"
-    if offTask != lastReportedOffTask {
-      lastReportedOffTask = offTask
-      FlowSessionMirror.shared.agentReportedFocusChange(isDistracted: offTask)
-      if offTask {
-        print("[FlowAgent] Off task: \(verdict.reason ?? "no reason given")")
+  private func handle(_ parsed: FlowParsedVerdict) {
+    if parsed.isOffTask != lastReportedOffTask {
+      lastReportedOffTask = parsed.isOffTask
+      FlowSessionMirror.shared.agentReportedFocusChange(isDistracted: parsed.isOffTask)
+      if parsed.isOffTask {
+        print("[FlowAgent] Off task: \(parsed.reason ?? "no reason given")")
       }
     }
 
     // Goals the model saw finished: resolve g-ids, relay once each.
-    let finished = (verdict.completed_goals ?? []).compactMap { short -> FlowGoalTask? in
+    let finished = parsed.completedGoals.compactMap { short -> FlowGoalTask? in
       let digits = short.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "g[] "))
       guard let index = Int(digits), index >= 1, index <= goalTasks.count else { return nil }
       let task = goalTasks[index - 1]
@@ -507,16 +509,12 @@ final class FlowDistractionAgent: ObservableObject {
       FlowSessionMirror.shared.agentCompletedGoals(finished)
     }
 
-    switch verdict.action {
-    case "nudge":
-      let message =
-        verdict.message ?? String(localized: "Psst... I think you're getting distracted!")
+    switch parsed.overlay {
+    case .nudge(let message):
       FlowSessionMirror.shared.agentNudge(message: message)
-    case "praise":
-      if let message = verdict.message, !message.isEmpty {
-        FlowSessionMirror.shared.agentPraise(message: message)
-      }
-    default:
+    case .praise(let message):
+      FlowSessionMirror.shared.agentPraise(message: message)
+    case .none:
       break
     }
   }

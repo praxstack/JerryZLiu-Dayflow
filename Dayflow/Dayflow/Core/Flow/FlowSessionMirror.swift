@@ -87,7 +87,6 @@ final class FlowSessionMirror: ObservableObject {
       isDistracted = false
       snoozeUntil = nil
       nudgeStreak = 0
-      showToast(String(localized: "Your flow session starts now!"))
       FlowDistractionAgent.shared.start(with: newSnapshot)
       AnalyticsService.shared.capture(
         "flow_session_started",
@@ -96,11 +95,9 @@ final class FlowSessionMirror: ObservableObject {
           "always_on": newSnapshot.alwaysOn,
         ])
     case (_, .onBreak):
-      showBreak()
       FlowDistractionAgent.shared.pause()
     case (.onBreak, .active):
       breakOverlayTimer?.invalidate()
-      showToast(String(localized: "Break's over. Back to it!"))
       FlowDistractionAgent.shared.resume()
       FlowDistractionAgent.shared.goalsChanged(to: newSnapshot)
     case (.active, .active):
@@ -111,12 +108,11 @@ final class FlowSessionMirror: ObservableObject {
       snoozeUntil = nil
       FlowSessionTimeline.shared.finish()
       FlowDistractionAgent.shared.stop()
-      if case (_, .idle) = (previous.phase, newSnapshot.phase) {
-        overlay = .hidden
-      }
     default:
       break
     }
+
+    applyPhaseOverlay(FlowOverlayMapping.event(from: previous.phase, to: newSnapshot.phase))
 
     armDeadlineTimer()
   }
@@ -160,12 +156,11 @@ final class FlowSessionMirror: ObservableObject {
     isDistracted = true
     // Let the web UI record a distraction_started event with the backend.
     webBridge?.sendEvent("distractionSimulated", payload: [:])
-    guard snapshot.alertStyle != .quiet else { return }
     snoozeUntil = nil
-    nudgeStreak += 1
-    overlay = .nudge(
-      message: String(localized: "Psst... I think you're getting distracted!"),
-      escalated: nudgeStreak >= 2)
+    if let next = mappedOverlay(for: .nudge(""), streakAfter: nudgeStreak + 1) {
+      nudgeStreak += 1
+      overlay = next
+    }
     armDeadlineTimer()
   }
 
@@ -186,12 +181,13 @@ final class FlowSessionMirror: ObservableObject {
   /// Show a nudge written by the agent. Quiet mode and an active snooze both
   /// suppress it (the distraction is still logged via the focus change above).
   func agentNudge(message: String) {
-    guard snapshot.phase == .active, snapshot.alertStyle != .quiet else { return }
-    if let snoozeUntil, snoozeUntil > Date() { return }
+    guard let next = mappedOverlay(for: .nudge(message), streakAfter: nudgeStreak + 1) else {
+      return
+    }
     AnalyticsService.shared.capture(
       "flow_agent_nudge", ["alert_style": snapshot.alertStyle.rawValue])
     nudgeStreak += 1
-    overlay = .nudge(message: message, escalated: nudgeStreak >= 2)
+    overlay = next
   }
 
   /// The agent saw goals get finished on screen: the web UI checks them off
@@ -212,8 +208,7 @@ final class FlowSessionMirror: ObservableObject {
 
   /// Short encouragement from the agent, shown as an auto-dismissing toast.
   func agentPraise(message: String) {
-    guard snapshot.phase == .active, snapshot.alertStyle != .quiet else { return }
-    if case .nudge = overlay { return }
+    guard mappedOverlay(for: .praise(message), streakAfter: nudgeStreak) != nil else { return }
     showToast(message, seconds: FlowAgentSettings.shared.praiseSeconds)
   }
 
@@ -332,6 +327,38 @@ final class FlowSessionMirror: ObservableObject {
     }
 
     armDeadlineTimer()
+  }
+
+  // MARK: - Overlay policy (FlowOverlayMapping)
+
+  private func applyPhaseOverlay(_ event: FlowPhaseOverlayEvent) {
+    switch event {
+    case .sessionStarted:
+      showToast(String(localized: "Your flow session starts now!"))
+    case .onBreak:
+      showBreak()
+    case .breakOver:
+      showToast(String(localized: "Break's over. Back to it!"))
+    case .hide:
+      overlay = .hidden
+    case .unchanged:
+      break
+    }
+  }
+
+  private func mappedOverlay(
+    for action: FlowOverlayAction,
+    streakAfter: Int
+  ) -> FlowOverlayPresentation? {
+    let snoozed = snoozeUntil.map { $0 > Date() } ?? false
+    return FlowOverlayMapping.overlay(
+      for: action,
+      phase: snapshot.phase,
+      alertStyle: snapshot.alertStyle,
+      snoozed: snoozed,
+      current: overlay,
+      nudgeStreakAfterThisNudge: streakAfter
+    )
   }
 
   // MARK: - Toasts

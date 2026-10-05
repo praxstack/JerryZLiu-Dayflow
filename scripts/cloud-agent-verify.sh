@@ -4,20 +4,16 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-if ! command -v swift >/dev/null 2>&1; then
-  if [[ -f /opt/swiftly/bin/swiftly ]]; then
-    export PATH="/opt/swiftly/bin:${PATH}"
-    export SWIFTLY_HOME_DIR="${SWIFTLY_HOME_DIR:-/opt/swiftly}"
-    export SWIFTLY_BIN_DIR="${SWIFTLY_BIN_DIR:-/opt/swiftly/bin}"
-    export SWIFTLY_TOOLCHAINS_DIR="${SWIFTLY_TOOLCHAINS_DIR:-/opt/swiftly/toolchains}"
-    if [[ -f /opt/swiftly/env.sh ]]; then
-      # shellcheck disable=SC1091
-      source /opt/swiftly/env.sh
-    fi
-  elif [[ -f "${HOME}/.local/share/swiftly/env.sh" ]]; then
-    # shellcheck disable=SC1091
-    source "${HOME}/.local/share/swiftly/env.sh"
-  fi
+if [[ -f /opt/swiftly/env.sh ]]; then
+  # SWIFTLY_HOME_DIR is required; PATH-only is not enough for the swiftly shims.
+  export SWIFTLY_HOME_DIR="${SWIFTLY_HOME_DIR:-/opt/swiftly}"
+  export SWIFTLY_BIN_DIR="${SWIFTLY_BIN_DIR:-/opt/swiftly/bin}"
+  export SWIFTLY_TOOLCHAINS_DIR="${SWIFTLY_TOOLCHAINS_DIR:-/opt/swiftly/toolchains}"
+  # shellcheck disable=SC1091
+  source /opt/swiftly/env.sh
+elif [[ -f "${HOME}/.local/share/swiftly/env.sh" ]]; then
+  # shellcheck disable=SC1091
+  source "${HOME}/.local/share/swiftly/env.sh"
 fi
 
 DAYFLOW_BIN="${DAYFLOW_BIN:-$ROOT/.cursor/bin/dayflow}"

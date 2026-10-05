@@ -1,0 +1,23 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  unit-tests:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run DayflowTests
+        run: |
+          xcodebuild test \
+            -project Dayflow/Dayflow.xcodeproj \
+            -scheme Dayflow \
+            -destination 'platform=macOS' \
+            -only-testing:DayflowTests \
+            -resultBundlePath TestResults
+      - name: Build dayflow-cli
+        run: cd tools/dayflow-cli && swift build

@@ -134,6 +134,8 @@ Select the Dayflow scheme in Xcode and run it.
 
 Issues and pull requests are welcome. If you are planning a larger change, open an issue first so the scope is clear.
 
+AI agents and MCP contributors: see [AGENTS.md](AGENTS.md).
+
 ### CI
 
 Pull requests run `DayflowTests` on macOS via GitHub Actions. Locally:

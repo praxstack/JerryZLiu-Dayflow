@@ -18,15 +18,21 @@ let dayKeyFormatter: DateFormatter = {
   return formatter
 }()
 
-struct DayWindow {
-  let dayKey: String  // "2026-03-11"
-  let start: Date  // 4 AM that day
-  let end: Date  // 4 AM the next day
+public struct DayWindow {
+  public let dayKey: String  // "2026-03-11"
+  public let start: Date  // 4 AM that day
+  public let end: Date  // 4 AM the next day
+
+  public init(dayKey: String, start: Date, end: Date) {
+    self.dayKey = dayKey
+    self.start = start
+    self.end = end
+  }
 }
 
 /// The Dayflow day containing `date`. Before 4 AM this resolves to the
 /// previous calendar day, matching Date.getDayInfoFor4AMBoundary() in the app.
-func dayWindow(containing date: Date) -> DayWindow {
+public func dayWindow(containing date: Date) -> DayWindow {
   let calendar = Calendar.current
   let fourAM = calendar.date(bySettingHour: 4, minute: 0, second: 0, of: date) ?? date
   let start = date < fourAM ? calendar.date(byAdding: .day, value: -1, to: fourAM)! : fourAM
@@ -37,7 +43,7 @@ func dayWindow(containing date: Date) -> DayWindow {
 /// The Dayflow day for an explicit "YYYY-MM-DD" label. Returns nil for
 /// unparseable input. Matches fetchTimelineCards(forDay:) in the app: 4 AM on
 /// the named day through 4 AM the next day.
-func dayWindow(forKey key: String) -> DayWindow? {
+public func dayWindow(forKey key: String) -> DayWindow? {
   guard let dayDate = dayKeyFormatter.date(from: key) else { return nil }
   let calendar = Calendar.current
   var startComponents = calendar.dateComponents([.year, .month, .day], from: dayDate)
@@ -48,13 +54,18 @@ func dayWindow(forKey key: String) -> DayWindow? {
   return DayWindow(dayKey: key, start: start, end: end)
 }
 
-struct WeekWindow {
-  let start: Date  // Monday 4 AM
-  let end: Date  // next Monday 4 AM
+public struct WeekWindow {
+  public let start: Date  // Monday 4 AM
+  public let end: Date  // next Monday 4 AM
+
+  public init(start: Date, end: Date) {
+    self.start = start
+    self.end = end
+  }
 }
 
 /// The Dayflow week containing `date`. Mirrors WeeklyDateRange.containing().
-func weekWindow(containing date: Date) -> WeekWindow {
+public func weekWindow(containing date: Date) -> WeekWindow {
   var calendar = Calendar.current
   calendar.firstWeekday = 2  // Monday
 
@@ -75,7 +86,7 @@ func weekWindow(containing date: Date) -> WeekWindow {
   return WeekWindow(start: start, end: end)
 }
 
-func formatDuration(minutes: Int) -> String {
+public func formatDuration(minutes: Int) -> String {
   let hours = minutes / 60
   let mins = minutes % 60
   if hours == 0 { return "\(mins)m" }

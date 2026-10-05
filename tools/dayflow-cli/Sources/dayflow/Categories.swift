@@ -7,7 +7,9 @@
 //  the calendar kernel.
 //
 
+#if canImport(DayflowCalendar)
 import DayflowCalendar
+#endif
 import Foundation
 
 struct Category {

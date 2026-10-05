@@ -17,7 +17,7 @@
 - **Depends on**: plans/001-ci-verification-baseline.md
 - **Category**: tech-debt
 - **Planned at**: commit `274c059`, 2026-08-29
-- **Landed (partial)**: app characterization tests for 4 AM day + Monday week roll (prax/calendar-kernel-tests-6fc7). Shared kernel extraction still TODO.
+- **Landed (partial)**: shared kernel + Xcode `dayflow-cli` tool on `prax/calendar-kernel-tests-6fc7`. Remaining: macOS `xcodebuild` Confirm-on-Mac.
 
 ## Why this matters
 
@@ -134,7 +134,7 @@ Remove redundant implementations once wrappers delegate entirely to `DayflowCale
 - [x] Single source of truth for day/week windows used by app timeline queries and CLI `fetchActivities`
 - [ ] Characterization tests pass on CI (plan 001 workflow) — XCTest added; macOS `xcodebuild` not run in this Linux environment; Linux kernel tests run via `swift test --package-path tools/dayflow-kernel`
 - [x] No duplicate `dayWindow` implementation bodies in CLI and app
-- [ ] `plans/README.md` row 002 → DONE (status IN PROGRESS until macOS CI runs the XCTest files)
+- [ ] `plans/README.md` row 002 → DONE (status IN PROGRESS until macOS Confirm-on-Mac runs `xcodebuild` for the app, `dayflow-cli` tool, and `DayflowCalendarKernelTests`)
 
 ## STOP conditions
 

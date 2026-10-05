@@ -2,8 +2,8 @@ import Foundation
 import XCTest
 import DayflowCalendar
 
-/// Proves the CLI package links the shared kernel (plan 002 option B).
-/// Folding the CLI into the Xcode app target remains option A / macOS-only.
+/// Proves the CLI SwiftPM package still links the shared kernel on Linux/CI.
+/// The macOS app graph also compiles these sources as the `dayflow-cli` tool.
 final class KernelWiringTests: XCTestCase {
   func testCLIPackageLinksDayflowCalendar() {
     XCTAssertEqual(DayflowCalendar.dayStartHour, 4)

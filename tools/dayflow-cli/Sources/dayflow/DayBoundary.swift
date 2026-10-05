@@ -3,11 +3,15 @@
 //  dayflow-cli
 //
 //  Thin wrappers around DayflowCalendar, the shared 4 AM day / Monday week
-//  kernel also compiled into the macOS app.
+//  kernel. SwiftPM imports the DayflowCalendar module; the Xcode `dayflow-cli`
+//  tool compiles the same kernel sources into this target, so the import is
+//  gated on canImport.
 //
 
 import Foundation
+#if canImport(DayflowCalendar)
 @_exported import DayflowCalendar
+#endif
 
 let dayKeyFormatter: DateFormatter = {
   DayflowCalendar.dayKeyFormatter(timeZone: Calendar.current.timeZone)

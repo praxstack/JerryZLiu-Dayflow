@@ -4,8 +4,8 @@
 //
 //  Single source of truth for Dayflow's 4 AM day and Monday-4 AM week windows.
 //  Compiled into the macOS app via the DayflowCalendar PBXFileSystemSynchronizedRootGroup
-//  in Dayflow.xcodeproj (path: tools/dayflow-kernel/Sources/DayflowCalendar) and into
-//  dayflow-cli via this SwiftPM package.
+//  in Dayflow.xcodeproj, into the dayflow-cli Xcode tool target via DayflowCalendarCLI,
+//  and into Linux/CI `dayflow-cli` via this SwiftPM package.
 //
 
 import Foundation

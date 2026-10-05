@@ -8,4 +8,5 @@
 - [x] 6. Add DayflowCalendarKernelTests for macOS xcodebuild (not runnable here)
 - [x] 7. CLI SwiftPM test target linking DayflowCalendar
 - [x] 8. Document Xcode CLI fold-in as remaining (plan 002 option A)
+- [x] 9. Add `dayflow-cli` Xcode tool target sharing the kernel folder (plan 002 option A)
 

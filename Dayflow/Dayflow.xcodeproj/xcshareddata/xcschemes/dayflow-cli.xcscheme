@@ -15,20 +15,6 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "C4C1D2A02DB56805007D5A55"
-               BuildableName = "Dayflow.app"
-               BlueprintName = "Dayflow"
-               ReferencedContainer = "container:Dayflow.xcodeproj">
-            </BuildableReference>
-         </BuildActionEntry>
-         <BuildActionEntry
-            buildForTesting = "YES"
-            buildForRunning = "YES"
-            buildForProfiling = "YES"
-            buildForArchiving = "YES"
-            buildForAnalyzing = "YES">
-            <BuildableReference
-               BuildableIdentifier = "primary"
                BlueprintIdentifier = "DFCA20042F9C0001000000B4"
                BuildableName = "dayflow"
                BlueprintName = "dayflow-cli"
@@ -44,28 +30,6 @@
       shouldUseLaunchSchemeArgsEnv = "YES"
       shouldAutocreateTestPlan = "YES">
       <Testables>
-         <TestableReference
-            skipped = "NO"
-            parallelizable = "YES">
-            <BuildableReference
-               BuildableIdentifier = "primary"
-               BlueprintIdentifier = "C4C1D2B12DB56806007D5A55"
-               BuildableName = "DayflowTests.xctest"
-               BlueprintName = "DayflowTests"
-               ReferencedContainer = "container:Dayflow.xcodeproj">
-            </BuildableReference>
-         </TestableReference>
-         <TestableReference
-            skipped = "NO"
-            parallelizable = "YES">
-            <BuildableReference
-               BuildableIdentifier = "primary"
-               BlueprintIdentifier = "C4C1D2BB2DB56806007D5A55"
-               BuildableName = "DayflowUITests.xctest"
-               BlueprintName = "DayflowUITests"
-               ReferencedContainer = "container:Dayflow.xcodeproj">
-            </BuildableReference>
-         </TestableReference>
       </Testables>
    </TestAction>
    <LaunchAction
@@ -82,9 +46,9 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "C4C1D2A02DB56805007D5A55"
-            BuildableName = "Dayflow.app"
-            BlueprintName = "Dayflow"
+            BlueprintIdentifier = "DFCA20042F9C0001000000B4"
+            BuildableName = "dayflow"
+            BlueprintName = "dayflow-cli"
             ReferencedContainer = "container:Dayflow.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
@@ -99,9 +63,9 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "C4C1D2A02DB56805007D5A55"
-            BuildableName = "Dayflow.app"
-            BlueprintName = "Dayflow"
+            BlueprintIdentifier = "DFCA20042F9C0001000000B4"
+            BuildableName = "dayflow"
+            BlueprintName = "dayflow-cli"
             ReferencedContainer = "container:Dayflow.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>

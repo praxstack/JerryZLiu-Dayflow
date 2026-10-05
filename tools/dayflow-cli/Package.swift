@@ -6,9 +6,9 @@ import PackageDescription
 // It depends on the local `tools/dayflow-kernel` package (shared 4 AM calendar
 // types) and nothing from the public Swift package index. SQLite comes from
 // the system SDK on macOS and from libsqlite3 via a system-library target on
-// Linux. Argument parsing is hand-rolled, so this builds with `swift build`
-// alone and can later be folded into Dayflow.app as an Xcode target without
-// dragging any package resolution along with it.
+// Linux. Argument parsing is hand-rolled. macOS app builds compile this
+// executable as the `dayflow-cli` Xcode tool target; this Package.swift is
+// the Linux/CI and `swift test --package-path tools/dayflow-cli` path.
 #if os(Linux)
 let sqliteDependency: [Target.Dependency] = ["CSQLite"]
 let sqliteTargets: [Target] = [

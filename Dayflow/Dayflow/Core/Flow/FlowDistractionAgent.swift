@@ -38,17 +38,6 @@ final class FlowDistractionAgent: ObservableObject {
   @Published private(set) var lastTickAt: Date?
   @Published private(set) var lastTickSeconds: Double?
 
-  /// The model's per-turn reply. Anything unparseable is treated as
-  /// on-task/no-action so a flaky turn can never fire a bogus nudge.
-  private struct Verdict: Decodable {
-    let status: String?
-    let action: String?
-    let message: String?
-    let reason: String?
-    /// Short goal ids ("g2") the model saw finished on screen this turn.
-    let completed_goals: [String]?
-  }
-
   /// The optional second object in a reply: the model's revised timeline.
   private struct TimelineReply: Decodable {
     let timeline: [FlowSessionTimeline.ModelItem]?
@@ -335,7 +324,7 @@ final class FlowDistractionAgent: ObservableObject {
   private func scheduleTimer() {
     tickTimer?.invalidate()
     tickTimer = Timer.scheduledTimer(
-      withTimeInterval: max(5, settings.tickSeconds), repeats: true
+      withTimeInterval: max(FlowTickPolicy.minimumTickSeconds, settings.tickSeconds), repeats: true
     ) { _ in
       MainActor.assumeIsolated {
         FlowDistractionAgent.shared.tick()
@@ -344,8 +333,19 @@ final class FlowDistractionAgent: ObservableObject {
   }
 
   private func tick() {
+    switch FlowTickPolicy.beginTick(
+      running: codexSessionId != nil && workDirectory != nil,
+      paused: paused,
+      inFlight: tickInFlight,
+      enabled: settings.agentEnabled,
+      phase: FlowSessionMirror.shared.snapshot.phase
+    ) {
+    case .skip:
+      return
+    case .begin:
+      break
+    }
     guard let sessionId = codexSessionId, let directory = workDirectory else { return }
-    guard !paused, !tickInFlight else { return }
 
     tickInFlight = true
     let gen = generation
@@ -425,8 +425,16 @@ final class FlowDistractionAgent: ObservableObject {
     lastTickAt = Date()
     lastTickSeconds = seconds
 
-    guard let reply else {
-      consecutiveFailures += 1
+    let outcome = FlowTickPolicy.finishTick(
+      reply: reply,
+      lastReportedOffTask: lastReportedOffTask,
+      consecutiveFailures: consecutiveFailures,
+      maxFailures: settings.maxFailures
+    )
+
+    switch outcome.kind {
+    case .failed:
+      consecutiveFailures = outcome.consecutiveFailures
       print("[FlowAgent] Tick failed (\(consecutiveFailures)): \(error ?? "unknown")")
       appendTranscript("Turn failed: \(error ?? "unknown")")
       // Codex lost the conversation (its rollout file is gone, e.g. a full
@@ -441,7 +449,7 @@ final class FlowDistractionAgent: ObservableObject {
         pendingNotes.append("(Re-briefed mid-session after the previous conversation was lost.)")
         return
       }
-      if consecutiveFailures >= settings.maxFailures {
+      if outcome.shouldStop {
         print("[FlowAgent] Stopping after \(consecutiveFailures) consecutive failures")
         appendTranscript("Agent stopped after \(consecutiveFailures) consecutive failures.")
         AnalyticsService.shared.capture("flow_agent_gave_up")
@@ -449,22 +457,24 @@ final class FlowDistractionAgent: ObservableObject {
         statusLine = "Stopped after \(consecutiveFailures) failures"
       }
       return
-    }
-    consecutiveFailures = 0
-    appendTranscript(reply)
-
-    let objects = Self.jsonObjects(in: reply)
-    guard let first = objects.first,
-      let verdict = try? JSONDecoder().decode(Verdict.self, from: Data(first.utf8))
-    else {
-      print("[FlowAgent] Unparseable reply, treating as on-task: \(reply.prefix(200))")
+    case .unparseableFailSafe:
+      consecutiveFailures = 0
+      if let reply {
+        appendTranscript(reply)
+        print("[FlowAgent] Unparseable reply, treating as on-task: \(reply.prefix(200))")
+      }
       return
+    case .applied:
+      consecutiveFailures = 0
+      guard let reply else { return }
+      appendTranscript(reply)
+      let objects = FlowVerdictInterpreter.jsonObjects(in: reply)
+      // Fail-safe on-task / no overlay for garbage is handled above; a decoded
+      // verdict still must not flip lastReportedOffTask unless status changed.
+      handle(outcome.parsed)
+      timeline.observe(offTask: outcome.parsed.isOffTask, front: front, reason: outcome.parsed.reason)
+      if askedTimeline { readBackTimeline(fallback: Array(objects.dropFirst())) }
     }
-    // The verdict comes first and is acted on first; the timeline (when the
-    // tick asked for one) rides behind it in a second object.
-    handle(verdict: verdict)
-    timeline.observe(offTask: verdict.status == "off_task", front: front, reason: verdict.reason)
-    if askedTimeline { readBackTimeline(fallback: Array(objects.dropFirst())) }
   }
 
   /// After a timeline turn: take the file the model edited (or, if it
@@ -496,18 +506,17 @@ final class FlowDistractionAgent: ObservableObject {
     return (try? decoder.decode(TimelineReply.self, from: data))?.timeline
   }
 
-  private func handle(verdict: Verdict) {
-    let offTask = verdict.status == "off_task"
-    if offTask != lastReportedOffTask {
-      lastReportedOffTask = offTask
-      FlowSessionMirror.shared.agentReportedFocusChange(isDistracted: offTask)
-      if offTask {
-        print("[FlowAgent] Off task: \(verdict.reason ?? "no reason given")")
+  private func handle(_ parsed: FlowParsedVerdict) {
+    if parsed.isOffTask != lastReportedOffTask {
+      lastReportedOffTask = parsed.isOffTask
+      FlowSessionMirror.shared.agentReportedFocusChange(isDistracted: parsed.isOffTask)
+      if parsed.isOffTask {
+        print("[FlowAgent] Off task: \(parsed.reason ?? "no reason given")")
       }
     }
 
     // Goals the model saw finished: resolve g-ids, relay once each.
-    let finished = (verdict.completed_goals ?? []).compactMap { short -> FlowGoalTask? in
+    let finished = parsed.completedGoals.compactMap { short -> FlowGoalTask? in
       let digits = short.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "g[] "))
       guard let index = Int(digits), index >= 1, index <= goalTasks.count else { return nil }
       let task = goalTasks[index - 1]
@@ -520,16 +529,12 @@ final class FlowDistractionAgent: ObservableObject {
       FlowSessionMirror.shared.agentCompletedGoals(finished)
     }
 
-    switch verdict.action {
-    case "nudge":
-      let message =
-        verdict.message ?? String(localized: "Psst... I think you're getting distracted!")
+    switch parsed.overlay {
+    case .nudge(let message):
       FlowSessionMirror.shared.agentNudge(message: message)
-    case "praise":
-      if let message = verdict.message, !message.isEmpty {
-        FlowSessionMirror.shared.agentPraise(message: message)
-      }
-    default:
+    case .praise(let message):
+      FlowSessionMirror.shared.agentPraise(message: message)
+    case .none:
       break
     }
   }
@@ -742,46 +747,6 @@ final class FlowDistractionAgent: ObservableObject {
     if transcript.count > 200 {
       transcript.removeFirst(transcript.count - 200)
     }
-  }
-
-  // MARK: - Verdict parsing
-
-  /// Every top-level {...} in the reply, in order, tolerating fences and
-  /// stray prose around them. Strings are skipped so braces inside a title
-  /// don't confuse the depth count.
-  private static func jsonObjects(in reply: String) -> [String] {
-    var objects: [String] = []
-    var depth = 0
-    var start: String.Index?
-    var inString = false
-    var escaped = false
-    var index = reply.startIndex
-    while index < reply.endIndex {
-      let character = reply[index]
-      if inString {
-        if escaped {
-          escaped = false
-        } else if character == "\\" {
-          escaped = true
-        } else if character == "\"" {
-          inString = false
-        }
-      } else if character == "\"" {
-        inString = true
-      } else if character == "{" {
-        if depth == 0 { start = index }
-        depth += 1
-      } else if character == "}" {
-        depth -= 1
-        if depth == 0, let begin = start {
-          objects.append(String(reply[begin...index]))
-          start = nil
-        }
-        if depth < 0 { depth = 0 }
-      }
-      index = reply.index(after: index)
-    }
-    return objects
   }
 
   // MARK: - Screenshot capture

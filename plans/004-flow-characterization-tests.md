@@ -17,6 +17,8 @@
 - **Depends on**: plans/001-ci-verification-baseline.md
 - **Category**: tests
 - **Planned at**: commit `274c059`, 2026-08-29
+- **Landed (partial)**: FlowAgentDecision + overlay mapping + Linux kernel tests
+  (prax/flow-verdict-interpreter-6fc7). Mock FlowSessionMirror tests still TODO.
 
 ## Why this matters
 

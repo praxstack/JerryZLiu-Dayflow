@@ -3,9 +3,10 @@
 //  Dayflow
 //
 //  Holds the native mirror of Flow session state and decides what the desktop
-//  overlay shows. State changes arrive from the hosted web UI over the bridge;
-//  overlay pill actions are relayed back to the web UI (which owns talking to
-//  the backend).
+//  overlay shows. Tick/deadline decisions live in FlowTickPolicy (Linux-testable);
+//  this singleton owns AppKit, localization, and Foundation Timers. State
+//  changes arrive from the hosted web UI over the bridge; overlay pill actions
+//  are relayed back to the web UI (which owns talking to the backend).
 //
 
 import AppKit
@@ -61,11 +62,9 @@ final class FlowSessionMirror: ObservableObject {
   private init() {
     // Survive a relaunch mid-session: restore the last snapshot, but drop
     // states that no longer make sense (an expired timed session).
-    var restored = FlowNativeSnapshot.loadPersisted()
     let now = Int(Date().timeIntervalSince1970)
-    if restored.phase != .idle, let endsAt = restored.sessionEndsAt, endsAt <= now {
-      restored = .idle
-    }
+    let restored = FlowTickPolicy.restoredSnapshot(
+      FlowNativeSnapshot.loadPersisted(), nowUnix: now)
     snapshot = restored
     armDeadlineTimer()
     if restored.phase == .active {
@@ -87,7 +86,6 @@ final class FlowSessionMirror: ObservableObject {
       isDistracted = false
       snoozeUntil = nil
       nudgeStreak = 0
-      showToast(String(localized: "Your flow session starts now!"))
       FlowDistractionAgent.shared.start(with: newSnapshot)
       AnalyticsService.shared.capture(
         "flow_session_started",
@@ -96,11 +94,9 @@ final class FlowSessionMirror: ObservableObject {
           "always_on": newSnapshot.alwaysOn,
         ])
     case (_, .onBreak):
-      showBreak()
       FlowDistractionAgent.shared.pause()
     case (.onBreak, .active):
       breakOverlayTimer?.invalidate()
-      showToast(String(localized: "Break's over. Back to it!"))
       FlowDistractionAgent.shared.resume()
       FlowDistractionAgent.shared.goalsChanged(to: newSnapshot)
     case (.active, .active):
@@ -111,12 +107,11 @@ final class FlowSessionMirror: ObservableObject {
       snoozeUntil = nil
       FlowSessionTimeline.shared.finish()
       FlowDistractionAgent.shared.stop()
-      if case (_, .idle) = (previous.phase, newSnapshot.phase) {
-        overlay = .hidden
-      }
     default:
       break
     }
+
+    applyPhaseOverlay(FlowOverlayMapping.event(from: previous.phase, to: newSnapshot.phase))
 
     armDeadlineTimer()
   }
@@ -160,12 +155,11 @@ final class FlowSessionMirror: ObservableObject {
     isDistracted = true
     // Let the web UI record a distraction_started event with the backend.
     webBridge?.sendEvent("distractionSimulated", payload: [:])
-    guard snapshot.alertStyle != .quiet else { return }
     snoozeUntil = nil
-    nudgeStreak += 1
-    overlay = .nudge(
-      message: String(localized: "Psst... I think you're getting distracted!"),
-      escalated: nudgeStreak >= 2)
+    if let next = mappedOverlay(for: .nudge(""), streakAfter: nudgeStreak + 1) {
+      nudgeStreak += 1
+      overlay = next
+    }
     armDeadlineTimer()
   }
 
@@ -186,12 +180,13 @@ final class FlowSessionMirror: ObservableObject {
   /// Show a nudge written by the agent. Quiet mode and an active snooze both
   /// suppress it (the distraction is still logged via the focus change above).
   func agentNudge(message: String) {
-    guard snapshot.phase == .active, snapshot.alertStyle != .quiet else { return }
-    if let snoozeUntil, snoozeUntil > Date() { return }
+    guard let next = mappedOverlay(for: .nudge(message), streakAfter: nudgeStreak + 1) else {
+      return
+    }
     AnalyticsService.shared.capture(
       "flow_agent_nudge", ["alert_style": snapshot.alertStyle.rawValue])
     nudgeStreak += 1
-    overlay = .nudge(message: message, escalated: nudgeStreak >= 2)
+    overlay = next
   }
 
   /// The agent saw goals get finished on screen: the web UI checks them off
@@ -212,8 +207,7 @@ final class FlowSessionMirror: ObservableObject {
 
   /// Short encouragement from the agent, shown as an auto-dismissing toast.
   func agentPraise(message: String) {
-    guard snapshot.phase == .active, snapshot.alertStyle != .quiet else { return }
-    if case .nudge = overlay { return }
+    guard mappedOverlay(for: .praise(message), streakAfter: nudgeStreak) != nil else { return }
     showToast(message, seconds: FlowAgentSettings.shared.praiseSeconds)
   }
 
@@ -272,27 +266,19 @@ final class FlowSessionMirror: ObservableObject {
 
   // MARK: - Deadlines
 
-  /// Re-arms a single timer for the nearest upcoming deadline: session end,
-  /// break end, or snooze expiry. The web UI derives the same transitions from
-  /// the same timestamps, so both sides agree without bridge chatter.
+  /// Re-arms a single Foundation `Timer` for the nearest deadline. Cadence and
+  /// which deadline wins live in `FlowTickPolicy` so Linux tests can inject a
+  /// clock; this method only owns the live timer.
   private func armDeadlineTimer() {
     deadlineTimer?.invalidate()
     deadlineTimer = nil
 
-    var deadlines: [Date] = []
     let now = Date()
-    if snapshot.phase == .active, let endsAt = snapshot.sessionEndsAt {
-      deadlines.append(Date(timeIntervalSince1970: TimeInterval(endsAt)))
-    }
-    if snapshot.phase == .onBreak, let endsAt = snapshot.breakEndsAt {
-      deadlines.append(Date(timeIntervalSince1970: TimeInterval(endsAt)))
-    }
-    if let snoozeUntil {
-      deadlines.append(snoozeUntil)
-    }
-    guard let nearest = deadlines.min() else { return }
+    guard let nearest = FlowTickPolicy.nextDeadline(
+      now: now, snapshot: snapshot, snoozeUntil: snoozeUntil)
+    else { return }
 
-    let interval = max(0.5, nearest.timeIntervalSince(now))
+    let interval = FlowTickPolicy.scheduleDelay(until: nearest, now: now)
     deadlineTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: false) { _ in
       MainActor.assumeIsolated {
         FlowSessionMirror.shared.handleDeadline()
@@ -301,37 +287,71 @@ final class FlowSessionMirror: ObservableObject {
   }
 
   private func handleDeadline() {
-    let now = Int(Date().timeIntervalSince1970)
-
-    if let snoozeDeadline = snoozeUntil, snoozeDeadline <= Date() {
-      snoozeUntil = nil
-      // Still marked distracted after the snooze ran out → nudge again.
-      if isDistracted, snapshot.phase == .active, snapshot.alertStyle != .quiet {
+    let effects = FlowTickPolicy.deadlineEffects(
+      now: Date(),
+      snapshot: snapshot,
+      snoozeUntil: snoozeUntil,
+      isDistracted: isDistracted,
+      nudgeStreak: nudgeStreak
+    )
+    for effect in effects {
+      switch effect {
+      case .clearSnooze:
+        snoozeUntil = nil
+      case .snoozeRenudge(let escalated):
         nudgeStreak += 1
         overlay = .nudge(
           message: String(localized: "Snooze is up — ready to get back to it?"),
-          escalated: nudgeStreak >= 2)
+          escalated: escalated)
+      case .sessionEnded:
+        snapshot.phase = .ended
+        snapshot.persist()
+        overlay = .sessionEnded
+        FlowSessionTimeline.shared.finish()
+        FlowDistractionAgent.shared.stop()
+        AnalyticsService.shared.capture("flow_session_natural_end")
+      case .breakEnded:
+        snapshot.phase = .active
+        snapshot.breakEndsAt = nil
+        snapshot.persist()
+        breakOverlayTimer?.invalidate()
+        showToast(String(localized: "Break's over. Back to it!"))
       }
     }
 
-    if snapshot.phase == .active, let endsAt = snapshot.sessionEndsAt, endsAt <= now {
-      snapshot.phase = .ended
-      snapshot.persist()
-      overlay = .sessionEnded
-      FlowSessionTimeline.shared.finish()
-      FlowDistractionAgent.shared.stop()
-      AnalyticsService.shared.capture("flow_session_natural_end")
-    }
-
-    if snapshot.phase == .onBreak, let endsAt = snapshot.breakEndsAt, endsAt <= now {
-      snapshot.phase = .active
-      snapshot.breakEndsAt = nil
-      snapshot.persist()
-      breakOverlayTimer?.invalidate()
-      showToast(String(localized: "Break's over. Back to it!"))
-    }
-
     armDeadlineTimer()
+  }
+
+  // MARK: - Overlay policy (FlowOverlayMapping)
+
+  private func applyPhaseOverlay(_ event: FlowPhaseOverlayEvent) {
+    switch event {
+    case .sessionStarted:
+      showToast(String(localized: "Your flow session starts now!"))
+    case .onBreak:
+      showBreak()
+    case .breakOver:
+      showToast(String(localized: "Break's over. Back to it!"))
+    case .hide:
+      overlay = .hidden
+    case .unchanged:
+      break
+    }
+  }
+
+  private func mappedOverlay(
+    for action: FlowOverlayAction,
+    streakAfter: Int
+  ) -> FlowOverlayPresentation? {
+    let snoozed = snoozeUntil.map { $0 > Date() } ?? false
+    return FlowOverlayMapping.overlay(
+      for: action,
+      phase: snapshot.phase,
+      alertStyle: snapshot.alertStyle,
+      snoozed: snoozed,
+      current: overlay,
+      nudgeStreakAfterThisNudge: streakAfter
+    )
   }
 
   // MARK: - Toasts

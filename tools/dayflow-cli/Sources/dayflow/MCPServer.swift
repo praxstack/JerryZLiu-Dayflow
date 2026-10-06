@@ -12,6 +12,9 @@
 //
 
 import Foundation
+#if os(Linux)
+import Glibc
+#endif
 
 private let mcpProtocolVersion = "2025-06-18"
 

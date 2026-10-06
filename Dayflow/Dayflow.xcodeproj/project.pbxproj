@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		DFCA200D2F9C0001000000BD /* dayflow in Embed Dayflow CLI */ = {isa = PBXBuildFile; fileRef = DFCA20012F9C0001000000B1 /* dayflow */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		C469402F2E8C947E00CA648B /* Sentry in Frameworks */ = {isa = PBXBuildFile; productRef = C469402E2E8C947E00CA648B /* Sentry */; };
 		C4A035B12E6CFEC600DE0FBD /* PostHog in Frameworks */ = {isa = PBXBuildFile; productRef = C4A035B02E6CFEC600DE0FBD /* PostHog */; };
 		C4AD00032F0D00010000000C /* MarkdownUI in Frameworks */ = {isa = PBXBuildFile; productRef = C4AD00022F0D00010000000B /* MarkdownUI */; };
@@ -29,9 +30,31 @@
 			remoteGlobalIDString = C4C1D2A02DB56805007D5A55;
 			remoteInfo = Dayflow;
 		};
+		DFCA200A2F9C0001000000BA /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = C4C1D2992DB56805007D5A55 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = DFCA20042F9C0001000000B4;
+			remoteInfo = "dayflow-cli";
+		};
 /* End PBXContainerItemProxy section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		DFCA200C2F9C0001000000BC /* Embed Dayflow CLI */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = Helpers;
+			dstSubfolderSpec = 1;
+			files = (
+				DFCA200D2F9C0001000000BD /* dayflow in Embed Dayflow CLI */,
+			);
+			name = "Embed Dayflow CLI";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		DFCA20012F9C0001000000B1 /* dayflow */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = dayflow; sourceTree = BUILT_PRODUCTS_DIR; };
 		C4C1D2A12DB56805007D5A55 /* Dayflow.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Dayflow.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C4C1D2B22DB56806007D5A55 /* DayflowTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = DayflowTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C4C1D2BC2DB56806007D5A55 /* DayflowUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = DayflowUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -43,6 +66,24 @@
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = Dayflow;
 			sourceTree = "<group>";
+		};
+		DFCA10012F9B0001000000A1 /* DayflowCalendar */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			name = DayflowCalendar;
+			path = ../tools/dayflow-kernel/Sources/DayflowCalendar;
+			sourceTree = SOURCE_ROOT;
+		};
+		DFCA20022F9C0001000000B2 /* dayflow-cli */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			name = "dayflow-cli";
+			path = ../tools/dayflow-cli/Sources/dayflow;
+			sourceTree = SOURCE_ROOT;
+		};
+		DFCA20032F9C0001000000B3 /* DayflowCalendarCLI */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			name = DayflowCalendarCLI;
+			path = ../tools/dayflow-kernel/Sources/DayflowCalendar;
+			sourceTree = SOURCE_ROOT;
 		};
 		FEFD599FBA059B170B03FA5E /* DayflowTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
@@ -78,6 +119,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		DFCA20062F9C0001000000B6 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -86,6 +134,9 @@
 			children = (
 				C4C1D2A32DB56805007D5A55 /* Dayflow */,
 				FEFD599FBA059B170B03FA5E /* DayflowTests */,
+				DFCA10012F9B0001000000A1 /* DayflowCalendar */,
+				DFCA20022F9C0001000000B2 /* dayflow-cli */,
+				DFCA20032F9C0001000000B3 /* DayflowCalendarCLI */,
 				C4DF00012EFB100000000001 /* Config/Dayflow.xcconfig */,
 				C4C1D2A22DB56805007D5A55 /* Products */,
 			);
@@ -95,6 +146,7 @@
 			isa = PBXGroup;
 			children = (
 				C4C1D2A12DB56805007D5A55 /* Dayflow.app */,
+				DFCA20012F9C0001000000B1 /* dayflow */,
 				C4C1D2B22DB56806007D5A55 /* DayflowTests.xctest */,
 				C4C1D2BC2DB56806007D5A55 /* DayflowUITests.xctest */,
 			);
@@ -111,14 +163,16 @@
 				C4C1D29D2DB56805007D5A55 /* Sources */,
 				C4C1D29E2DB56805007D5A55 /* Frameworks */,
 				C4C1D29F2DB56805007D5A55 /* Resources */,
-				C4A7E0012F1F00010000000C /* Embed Dayflow CLI */,
+				DFCA200C2F9C0001000000BC /* Embed Dayflow CLI */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				DFCA200B2F9C0001000000BB /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				C4C1D2A32DB56805007D5A55 /* Dayflow */,
+				DFCA10012F9B0001000000A1 /* DayflowCalendar */,
 			);
 			name = Dayflow;
 			packageProductDependencies = (
@@ -131,6 +185,28 @@
 			productName = Dayflow;
 			productReference = C4C1D2A12DB56805007D5A55 /* Dayflow.app */;
 			productType = "com.apple.product-type.application";
+		};
+		DFCA20042F9C0001000000B4 /* dayflow-cli */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = DFCA20072F9C0001000000B7 /* Build configuration list for PBXNativeTarget "dayflow-cli" */;
+			buildPhases = (
+				DFCA20052F9C0001000000B5 /* Sources */,
+				DFCA20062F9C0001000000B6 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				DFCA20022F9C0001000000B2 /* dayflow-cli */,
+				DFCA20032F9C0001000000B3 /* DayflowCalendarCLI */,
+			);
+			name = "dayflow-cli";
+			packageProductDependencies = (
+			);
+			productName = dayflow;
+			productReference = DFCA20012F9C0001000000B1 /* dayflow */;
+			productType = "com.apple.product-type.tool";
 		};
 		C4C1D2B12DB56806007D5A55 /* DayflowTests */ = {
 			isa = PBXNativeTarget;
@@ -196,6 +272,9 @@
 						CreatedOnToolsVersion = 16.2;
 						TestTargetID = C4C1D2A02DB56805007D5A55;
 					};
+					DFCA20042F9C0001000000B4 = {
+						CreatedOnToolsVersion = 16.2;
+					};
 				};
 			};
 			buildConfigurationList = C4C1D29C2DB56805007D5A55 /* Build configuration list for PBXProject "Dayflow" */;
@@ -227,6 +306,7 @@
 			projectRoot = "";
 			targets = (
 				C4C1D2A02DB56805007D5A55 /* Dayflow */,
+				DFCA20042F9C0001000000B4 /* dayflow-cli */,
 				C4C1D2B12DB56806007D5A55 /* DayflowTests */,
 				C4C1D2BB2DB56806007D5A55 /* DayflowUITests */,
 			);
@@ -257,28 +337,6 @@
 		};
 /* End PBXResourcesBuildPhase section */
 
-/* Begin PBXShellScriptBuildPhase section */
-		C4A7E0012F1F00010000000C /* Embed Dayflow CLI */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-			);
-			name = "Embed Dayflow CLI";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "# Build the SwiftPM CLI and place it next to the app executable.\n# env -i strips Xcode's SDK/arch variables, which confuse swift-build.\nset -euo pipefail\nCLI_DIR=\"${SRCROOT}/../tools/dayflow-cli\"\nif [ \"${CONFIGURATION}\" = \"Release\" ]; then\n  env -i DEVELOPER_DIR=\"${DEVELOPER_DIR}\" HOME=\"$HOME\" PATH=\"/usr/bin:/bin:/usr/sbin:/sbin\" /usr/bin/swift build -c release --package-path \"$CLI_DIR\" --arch arm64 --arch x86_64\n  BIN=\"$CLI_DIR/.build/apple/Products/Release/dayflow\"\nelse\n  env -i DEVELOPER_DIR=\"${DEVELOPER_DIR}\" HOME=\"$HOME\" PATH=\"/usr/bin:/bin:/usr/sbin:/sbin\" /usr/bin/swift build -c release --package-path \"$CLI_DIR\"\n  BIN=\"$CLI_DIR/.build/release/dayflow\"\nfi\nDEST_DIR=\"${BUILT_PRODUCTS_DIR}/${CONTENTS_FOLDER_PATH}/Helpers\"\nDEST=\"$DEST_DIR/dayflow\"\nmkdir -p \"$DEST_DIR\"\ncp -f \"$BIN\" \"$DEST\"\n# Nested executables must match the app's signing identity or the app's\n# seal fails validation and RunningBoard refuses to launch it. Falls back\n# to adhoc (-) when signing is disabled.\ncodesign --force --sign \"${EXPANDED_CODE_SIGN_IDENTITY:--}\" \"$DEST\"\n";
-		};
-/* End PBXShellScriptBuildPhase section */
-
 /* Begin PBXSourcesBuildPhase section */
 		C4C1D29D2DB56805007D5A55 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
@@ -301,6 +359,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		DFCA20052F9C0001000000B5 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -313,6 +378,11 @@
 			isa = PBXTargetDependency;
 			target = C4C1D2A02DB56805007D5A55 /* Dayflow */;
 			targetProxy = C4C1D2BD2DB56806007D5A55 /* PBXContainerItemProxy */;
+		};
+		DFCA200B2F9C0001000000BB /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = DFCA20042F9C0001000000B4 /* dayflow-cli */;
+			targetProxy = DFCA200A2F9C0001000000BA /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -575,6 +645,62 @@
 			};
 			name = Release;
 		};
+		DFCA20082F9C0001000000B8 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 133;
+				DEVELOPMENT_TEAM = L75WYD8X4Y;
+				ENABLE_HARDENED_RUNTIME = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 2.6.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lsqlite3",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = teleportlabs.com.Dayflow.cli;
+				PRODUCT_MODULE_NAME = dayflow_cli;
+				PRODUCT_NAME = dayflow;
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		DFCA20092F9C0001000000B9 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 133;
+				DEVELOPMENT_TEAM = L75WYD8X4Y;
+				ENABLE_HARDENED_RUNTIME = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 2.6.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lsqlite3",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = teleportlabs.com.Dayflow.cli;
+				PRODUCT_MODULE_NAME = dayflow_cli;
+				PRODUCT_NAME = dayflow;
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -610,6 +736,15 @@
 			buildConfigurations = (
 				C4C1D2CD2DB56806007D5A55 /* Debug */,
 				C4C1D2CE2DB56806007D5A55 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		DFCA20072F9C0001000000B7 /* Build configuration list for PBXNativeTarget "dayflow-cli" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				DFCA20082F9C0001000000B8 /* Debug */,
+				DFCA20092F9C0001000000B9 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

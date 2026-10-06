@@ -1,0 +1,64 @@
+name: Cloud Agent env
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Validates the Cloud Agent image (#4): ubuntu:24.04 already has `ubuntu`, so
+# the Dockerfile must not useradd it. Install/verify runs on the runner with
+# Swift 6.3.3 via Swiftly, matching .cursor/Dockerfile and PR #7's linux job.
+# swift-actions/setup-swift@v2 catalogs through 6.2.1 and rejects 6.3.3.
+
+jobs:
+  dockerfile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dockerfile must not useradd ubuntu
+        run: |
+          set -euo pipefail
+          if grep -E 'useradd[[:space:]].*ubuntu' .cursor/Dockerfile; then
+            echo "ubuntu:24.04 already has an ubuntu user; useradd fails the image build." >&2
+            exit 1
+          fi
+      - name: Build Cloud Agent Dockerfile
+        run: docker build -f .cursor/Dockerfile -t dayflow-cloud-agent:test .
+
+  install:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      SWIFT_VERSION: "6.3.3"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install SQLite and Swift toolchain deps
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libsqlite3-dev sqlite3 libcurl4-openssl-dev
+      - name: Install Swift ${{ env.SWIFT_VERSION }} via Swiftly
+        run: |
+          set -euo pipefail
+          export SWIFTLY_HOME_DIR="${HOME}/.local/share/swiftly"
+          export SWIFTLY_BIN_DIR="${SWIFTLY_HOME_DIR}/bin"
+          export SWIFTLY_TOOLCHAINS_DIR="${SWIFTLY_HOME_DIR}/toolchains"
+          curl -fsSL "https://download.swift.org/swiftly/linux/swiftly-$(uname -m).tar.gz" \
+            | tar xz -C /tmp
+          /tmp/swiftly init --no-modify-profile --skip-install --assume-yes
+          "$SWIFTLY_BIN_DIR/swiftly" install --use "$SWIFT_VERSION"
+          {
+            echo "SWIFTLY_HOME_DIR=${SWIFTLY_HOME_DIR}"
+            echo "SWIFTLY_BIN_DIR=${SWIFTLY_BIN_DIR}"
+            echo "SWIFTLY_TOOLCHAINS_DIR=${SWIFTLY_TOOLCHAINS_DIR}"
+          } >> "$GITHUB_ENV"
+          echo "${SWIFTLY_BIN_DIR}" >> "$GITHUB_PATH"
+          echo "${SWIFTLY_TOOLCHAINS_DIR}/${SWIFT_VERSION}/usr/bin" >> "$GITHUB_PATH"
+      - name: Confirm Swift ${{ env.SWIFT_VERSION }}
+        run: |
+          set -euo pipefail
+          swift --version
+          swift --version | grep -F "$SWIFT_VERSION"
+      - name: cloud-agent-install
+        run: bash scripts/cloud-agent-install.sh
+      - name: cloud-agent-verify
+        run: bash scripts/cloud-agent-verify.sh

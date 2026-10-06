@@ -144,6 +144,9 @@ struct SettingsProvidersTabView: View {
       SettingsRow(label: String(localized: "Endpoint")) {
         SettingsMetadata(text: viewModel.openAICompatibleBaseURL)
       }
+      SettingsRow(label: String(localized: "Max images")) {
+        SettingsMetadata(text: "\(viewModel.openAICompatibleMaxImagesPerRequest)")
+      }
       let hasKey = !viewModel.openAICompatibleAPIKey.trimmingCharacters(
         in: .whitespacesAndNewlines
       ).isEmpty

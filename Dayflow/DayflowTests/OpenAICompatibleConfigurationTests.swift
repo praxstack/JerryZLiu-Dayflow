@@ -2,47 +2,21 @@ import XCTest
 
 @testable import Dayflow
 
+/// macOS-app compile check plus Ollama transport tests. The exhaustive
+/// configuration / screenshot-budget suite lives in
+/// `tools/openai-compatible-kernel` and is what Linux CI runs.
 final class OpenAICompatibleConfigurationTests: XCTestCase {
-  private final class IgnoringUserDefaults: UserDefaults {
-    var ignoredWriteKeys: Set<String> = []
-
-    override func set(_ value: Any?, forKey defaultName: String) {
-      guard !ignoredWriteKeys.contains(defaultName) else { return }
-      super.set(value, forKey: defaultName)
-    }
-  }
-
-  func testOpenRouterPresetBuildsChatCompletionsURL() {
-    let configuration = OpenAICompatibleConfiguration.openRouter(
-      modelID: "  openai/example-model  ")
-
-    XCTAssertEqual(configuration.preset, .openRouter)
-    XCTAssertEqual(configuration.baseURL, "https://openrouter.ai/api/v1")
-    XCTAssertEqual(configuration.modelID, "openai/example-model")
+  func testKernelTypesAreLinkedIntoTheAppModule() {
+    XCTAssertEqual(OpenAICompatibleScreenshotBudget.defaultLimit, 15)
+    XCTAssertEqual(OpenAICompatibleScreenshotBudget.clamp(0), 1)
+    XCTAssertEqual(OpenAICompatibleScreenshotBudget.clamp(99), 15)
     XCTAssertEqual(
-      configuration.chatCompletionsURL?.absoluteString,
+      OpenAICompatibleScreenshotBudget.select(Array(0..<31), limit: 8).last, 30)
+    XCTAssertEqual(
+      OpenAICompatibleConfiguration.openRouter(modelID: "openai/example-model")
+        .chatCompletionsURL?.absoluteString,
       "https://openrouter.ai/api/v1/chat/completions"
     )
-    XCTAssertTrue(configuration.isComplete)
-  }
-
-  func testConfigurationPreferencesRoundTripInIsolatedDefaults() throws {
-    let suiteName = "OpenAICompatibleConfigurationTests.\(UUID().uuidString)"
-    let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
-    defer { defaults.removePersistentDomain(forName: suiteName) }
-
-    let configuration = OpenAICompatibleConfiguration(
-      preset: .custom,
-      baseURL: "https://example.com/v1/chat/completions",
-      modelID: "vision-model"
-    )
-
-    XCTAssertTrue(OpenAICompatiblePreferences.save(configuration, to: defaults))
-    XCTAssertEqual(OpenAICompatiblePreferences.load(from: defaults), configuration)
-
-    OpenAICompatiblePreferences.reset(in: defaults)
-    XCTAssertNil(OpenAICompatiblePreferences.load(from: defaults))
-    XCTAssertEqual(OpenAICompatiblePreferences.keychainProvider, "openai_compatible")
   }
 
   func testInjectedRuntimeBuildsIndependentBearerRequest() throws {
@@ -55,6 +29,7 @@ final class OpenAICompatibleConfigurationTests: XCTestCase {
       configuration: storedConfiguration,
       bearerToken: "  remote-secret  "
     )
+    XCTAssertEqual(runtimeConfiguration.maxImagesPerRequest, 15)
     let provider = OllamaProvider(openAICompatible: runtimeConfiguration)
     let chatRequest = OllamaProvider.ChatRequest(
       model: provider.savedModelId,
@@ -109,22 +84,5 @@ final class OpenAICompatibleConfigurationTests: XCTestCase {
     let request = try provider.makeChatURLRequest(chatRequest)
 
     XCTAssertNil(request.value(forHTTPHeaderField: "Authorization"))
-  }
-
-  func testFailedConfigurationWritePreservesPreviousValue() throws {
-    let suiteName = "OpenAICompatibleConfigurationTests.\(UUID().uuidString)"
-    let defaults = try XCTUnwrap(IgnoringUserDefaults(suiteName: suiteName))
-    defer { defaults.removePersistentDomain(forName: suiteName) }
-    let previous = OpenAICompatibleConfiguration.openRouter(modelID: "previous-model")
-    let replacement = OpenAICompatibleConfiguration(
-      preset: .custom,
-      baseURL: "https://replacement.example/v1",
-      modelID: "replacement-model"
-    )
-    XCTAssertTrue(OpenAICompatiblePreferences.save(previous, to: defaults))
-    defaults.ignoredWriteKeys = ["llmOpenAICompatibleConfigurationV1"]
-
-    XCTAssertFalse(OpenAICompatiblePreferences.save(replacement, to: defaults))
-    XCTAssertEqual(OpenAICompatiblePreferences.load(from: defaults), previous)
   }
 }

@@ -255,8 +255,8 @@ struct LocalLLMTestView: View {
           self.isTesting = false
           self.onTestComplete(true)
         } else {
-          let body = String(data: data, encoding: .utf8) ?? ""
-          self.resultMessage = "HTTP \(http.statusCode): \(body)"
+          self.resultMessage = OpenAICompatibleHTTPErrorFormatter.userMessage(
+            statusCode: http.statusCode, body: data)
           self.isTesting = false
           self.onTestComplete(false)
         }

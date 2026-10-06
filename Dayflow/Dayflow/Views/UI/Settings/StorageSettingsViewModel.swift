@@ -18,6 +18,12 @@ final class StorageSettingsViewModel: ObservableObject {
   @Published var pendingLimit: PendingLimit?
   @Published var captureHeight: Int = ScreenshotConfig.captureHeight
   @Published var captureInterval: TimeInterval = ScreenshotConfig.interval
+  @Published var idleCaptureThrottleEnabled: Bool {
+    didSet {
+      guard idleCaptureThrottleEnabled != oldValue else { return }
+      IdleCapturePreferences.enabled = idleCaptureThrottleEnabled
+    }
+  }
   /// Measured from the last hour of finalized segments; nil until enough has been recorded.
   @Published var observedBytesPerHour: Int64?
 
@@ -36,6 +42,7 @@ final class StorageSettingsViewModel: ObservableObject {
     timelapsesLimitBytes = timelapseLimit
     recordingsLimitIndex = Self.indexForLimit(recordingsLimit)
     timelapsesLimitIndex = Self.indexForLimit(timelapseLimit)
+    idleCaptureThrottleEnabled = IdleCapturePreferences.enabled
   }
 
   func refreshStorageIfNeeded(isStorageTab: Bool) {

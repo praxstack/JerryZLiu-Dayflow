@@ -16,6 +16,7 @@ import Sentry
 
 // MARK: - Configuration
 // Capture interval and resolution live in `ScreenshotConfig` (RecordingPreferences.swift).
+// Idle stretching of that interval is `IdleCaptureThrottle` (tools/idle-capture-kernel).
 
 private enum InputIdleSnapshot {
   // Bridge kCGAnyInputEventType into Swift without relying on a generated symbol name.
@@ -132,6 +133,12 @@ final class ScreenRecorder: NSObject, @unchecked Sendable {
 
   private let q = DispatchQueue(label: "com.dayflow.recorder", qos: .userInitiated)
   private var captureTimer: DispatchSourceTimer?
+  /// Last interval the repeating timer was scheduled with. Compared against
+  /// `IdleCaptureThrottle` each tick so idle/active transitions rebuild it.
+  private var currentCaptureInterval: TimeInterval?
+  /// Wall time of the last frame that was actually appended. Feeds the
+  /// time-since-last-capture gate; nil after stop so the next start fires immediately.
+  private var lastCaptureAt: Date?
   private var sub: AnyCancellable?
   private var activeDisplaySub: AnyCancellable?
   private var state: RecorderState = .idle
@@ -204,6 +211,7 @@ final class ScreenRecorder: NSObject, @unchecked Sendable {
     q.async { [weak self] in
       guard let self else { return }
       self.stopCaptureTimer()
+      self.lastCaptureAt = nil
       self.cachedContent = nil
       self.cachedDisplay = nil
       self.currentDisplayID = nil
@@ -321,24 +329,39 @@ final class ScreenRecorder: NSObject, @unchecked Sendable {
 
   // MARK: - Capture Timer
 
-  private func startCaptureTimer() {
+  /// Effective cadence: Settings > Storage base interval, stretched while idle
+  /// when the idle-capture throttle is on. See `IdleCaptureThrottle`.
+  private func targetCaptureInterval(idleSeconds: Int?) -> TimeInterval {
+    IdleCaptureThrottle.interval(
+      baseInterval: ScreenshotConfig.interval,
+      idleSeconds: idleSeconds,
+      enabled: IdleCapturePreferences.enabled
+    )
+  }
+
+  private func startCaptureTimer(interval: TimeInterval? = nil) {
     stopCaptureTimer()
 
-    let interval = ScreenshotConfig.interval
+    let resolvedInterval =
+      interval
+      ?? targetCaptureInterval(idleSeconds: InputIdleSnapshot.currentIdleSeconds())
+    currentCaptureInterval = resolvedInterval
+
     let timer = DispatchSource.makeTimerSource(queue: q)
-    timer.schedule(deadline: .now() + interval, repeating: interval)
+    timer.schedule(deadline: .now() + resolvedInterval, repeating: resolvedInterval)
     timer.setEventHandler { [weak self] in
       Task { await self?.captureScreenshot() }
     }
     timer.resume()
     captureTimer = timer
 
-    dbg("Capture timer started (interval: \(interval)s)")
+    dbg("Capture timer started (interval: \(resolvedInterval)s)")
   }
 
   private func stopCaptureTimer() {
     captureTimer?.cancel()
     captureTimer = nil
+    currentCaptureInterval = nil
   }
 
   // MARK: - Screenshot Capture
@@ -348,6 +371,28 @@ final class ScreenRecorder: NSObject, @unchecked Sendable {
       dbg("captureScreenshot skipped - state: \(state.description)")
       return
     }
+
+    let captureTime = Date()
+    let idleSecondsAtCapture = InputIdleSnapshot.currentIdleSeconds()
+    let decision = IdleCaptureThrottle.decide(
+      now: captureTime,
+      lastCapture: lastCaptureAt,
+      idleSeconds: idleSecondsAtCapture,
+      enabled: IdleCapturePreferences.enabled,
+      baseInterval: ScreenshotConfig.interval,
+      scheduledInterval: currentCaptureInterval
+    )
+    if let rescheduleTo = decision.rescheduleTo {
+      dbg(
+        "Capture interval changing: \(String(describing: currentCaptureInterval))s → \(rescheduleTo)s (idle: \(String(describing: idleSecondsAtCapture))s)"
+      )
+      startCaptureTimer(interval: rescheduleTo)
+    }
+    guard decision.shouldCapture else {
+      dbg("captureScreenshot skipped – idle throttle (elapsed < \(decision.interval)s)")
+      return
+    }
+
     guard let display = cachedDisplay else {
       dbg("captureScreenshot skipped - no display")
       return
@@ -356,9 +401,6 @@ final class ScreenRecorder: NSObject, @unchecked Sendable {
       handleMissingScreenRecordingPermission(reason: "captureScreenshot")
       return
     }
-
-    let captureTime = Date()
-    let idleSecondsAtCapture = InputIdleSnapshot.currentIdleSeconds()
 
     do {
       let captureSize = scaledCaptureSize(for: display)
@@ -442,6 +484,7 @@ final class ScreenRecorder: NSObject, @unchecked Sendable {
     guard screenshotId != nil else {
       throw ScreenRecorderError.imageConversionFailed
     }
+    lastCaptureAt = capturedAt
   }
 
   private func scaledCaptureSize(for display: SCDisplay) -> (width: Int, height: Int) {
@@ -497,6 +540,7 @@ final class ScreenRecorder: NSObject, @unchecked Sendable {
     q.async { [weak self] in
       guard let self else { return }
       self.stopCaptureTimer()
+      self.lastCaptureAt = nil
       self.cachedContent = nil
       self.cachedDisplay = nil
       self.currentDisplayID = nil

@@ -1,22 +1,22 @@
 import Foundation
 
-enum OpenAICompatiblePreset: String, Codable, CaseIterable {
+public enum OpenAICompatiblePreset: String, Codable, CaseIterable, Sendable {
   case openRouter = "openrouter"
   case custom
 }
 
 /// Caps how many screenshots a single OpenAI-compatible transcription request may attach.
-enum OpenAICompatibleScreenshotBudget {
-  static let defaultLimit = 15
-  static let minimumLimit = 1
-  static let maximumLimit = 15
+public enum OpenAICompatibleScreenshotBudget {
+  public static let defaultLimit = 15
+  public static let minimumLimit = 1
+  public static let maximumLimit = 15
 
-  static func clamp(_ value: Int) -> Int {
+  public static func clamp(_ value: Int) -> Int {
     min(maximumLimit, max(minimumLimit, value))
   }
 
   /// Evenly samples `items` down to `limit`, always keeping the first and last when possible.
-  static func select<T>(_ items: [T], limit: Int) -> [T] {
+  public static func select<T>(_ items: [T], limit: Int) -> [T] {
     guard !items.isEmpty else { return [] }
     let count = min(clamp(limit), items.count)
     if count == 1 { return [items[0]] }
@@ -27,8 +27,8 @@ enum OpenAICompatibleScreenshotBudget {
 }
 
 /// Pulls a gateway's `error.message` out of an HTTP body so setup tests can show it.
-enum OpenAICompatibleHTTPErrorFormatter {
-  static func userMessage(statusCode: Int, body: Data) -> String {
+public enum OpenAICompatibleHTTPErrorFormatter {
+  public static func userMessage(statusCode: Int, body: Data) -> String {
     if let extracted = extractMessage(from: body), !extracted.isEmpty {
       return "HTTP \(statusCode): \(extracted)"
     }
@@ -37,7 +37,7 @@ enum OpenAICompatibleHTTPErrorFormatter {
     return text.isEmpty ? "HTTP \(statusCode)" : "HTTP \(statusCode): \(text)"
   }
 
-  static func extractMessage(from body: Data) -> String? {
+  public static func extractMessage(from body: Data) -> String? {
     guard let object = try? JSONSerialization.jsonObject(with: body) else { return nil }
     return extractMessage(from: object)
   }
@@ -62,15 +62,61 @@ enum OpenAICompatibleHTTPErrorFormatter {
   }
 }
 
-struct OpenAICompatibleConfiguration: Codable, Equatable {
-  static let openRouterBaseURL = "https://openrouter.ai/api/v1"
+/// Builds a chat-completions endpoint URL from a user-provided base URL.
+/// The base may already include `/v1` (e.g., https://openrouter.ai/api/v1) or a full `/v1/chat/completions` path.
+public enum OpenAICompatibleEndpoint {
+  public static func chatCompletionsURL(baseURL: String) -> URL? {
+    let trimmed = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else { return nil }
+    guard var components = URLComponents(string: trimmed) else { return nil }
 
-  let preset: OpenAICompatiblePreset
-  let baseURL: String
-  let modelID: String
-  let maxImagesPerRequest: Int
+    var normalizedPath = sanitize(components.path)
+    let targetPath = "/v1/chat/completions"
 
-  init(
+    if normalizedPath.isEmpty {
+      normalizedPath = targetPath
+    } else if normalizedPath.hasSuffix(targetPath) {
+      // already points to /v1/chat/completions – keep as-is
+    } else if normalizedPath.hasSuffix("/v1") {
+      normalizedPath.append(contentsOf: "/chat/completions")
+    } else {
+      if normalizedPath == "/" {
+        normalizedPath = targetPath
+      } else {
+        normalizedPath.append(contentsOf: targetPath)
+      }
+    }
+
+    if !normalizedPath.hasPrefix("/") {
+      normalizedPath = "/" + normalizedPath
+    }
+
+    components.path = normalizedPath
+    return components.url
+  }
+
+  private static func sanitize(_ path: String) -> String {
+    guard !path.isEmpty else { return "" }
+    var normalized = path
+    while normalized.contains("//") {
+      normalized = normalized.replacingOccurrences(of: "//", with: "/")
+    }
+    while normalized.count > 1 && normalized.hasSuffix("/") {
+      normalized.removeLast()
+    }
+    return normalized
+  }
+}
+
+public struct OpenAICompatibleConfiguration: Codable, Equatable, Sendable {
+  public static let openRouterBaseURL = "https://openrouter.ai/api/v1"
+
+  public let preset: OpenAICompatiblePreset
+  public let baseURL: String
+  public let modelID: String
+  public let maxImagesPerRequest: Int
+
+  public init(
     preset: OpenAICompatiblePreset,
     baseURL: String,
     modelID: String,
@@ -82,7 +128,7 @@ struct OpenAICompatibleConfiguration: Codable, Equatable {
     self.maxImagesPerRequest = OpenAICompatibleScreenshotBudget.clamp(maxImagesPerRequest)
   }
 
-  static func openRouter(modelID: String = "") -> OpenAICompatibleConfiguration {
+  public static func openRouter(modelID: String = "") -> OpenAICompatibleConfiguration {
     OpenAICompatibleConfiguration(
       preset: .openRouter,
       baseURL: openRouterBaseURL,
@@ -90,11 +136,11 @@ struct OpenAICompatibleConfiguration: Codable, Equatable {
     )
   }
 
-  var chatCompletionsURL: URL? {
-    LocalEndpointUtilities.chatCompletionsURL(baseURL: baseURL)
+  public var chatCompletionsURL: URL? {
+    OpenAICompatibleEndpoint.chatCompletionsURL(baseURL: baseURL)
   }
 
-  var isComplete: Bool {
+  public var isComplete: Bool {
     !baseURL.isEmpty && !modelID.isEmpty && chatCompletionsURL != nil
   }
 
@@ -105,7 +151,7 @@ struct OpenAICompatibleConfiguration: Codable, Equatable {
     case maxImagesPerRequest
   }
 
-  init(from decoder: Decoder) throws {
+  public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     let preset = try container.decode(OpenAICompatiblePreset.self, forKey: .preset)
     let baseURL = try container.decode(String.self, forKey: .baseURL)
@@ -121,7 +167,7 @@ struct OpenAICompatibleConfiguration: Codable, Equatable {
     )
   }
 
-  func encode(to encoder: Encoder) throws {
+  public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
     try container.encode(preset, forKey: .preset)
     try container.encode(baseURL, forKey: .baseURL)
@@ -130,17 +176,17 @@ struct OpenAICompatibleConfiguration: Codable, Equatable {
   }
 }
 
-enum OpenAICompatiblePreferences {
-  static let keychainProvider = "openai_compatible"
-  private static let configurationKey = "llmOpenAICompatibleConfigurationV1"
+public enum OpenAICompatiblePreferences {
+  public static let keychainProvider = "openai_compatible"
+  public static let configurationKey = "llmOpenAICompatibleConfigurationV1"
 
-  static func load(from defaults: UserDefaults = .standard) -> OpenAICompatibleConfiguration? {
+  public static func load(from defaults: UserDefaults = .standard) -> OpenAICompatibleConfiguration? {
     guard let data = defaults.data(forKey: configurationKey) else { return nil }
     return try? JSONDecoder().decode(OpenAICompatibleConfiguration.self, from: data)
   }
 
   @discardableResult
-  static func save(
+  public static func save(
     _ configuration: OpenAICompatibleConfiguration,
     to defaults: UserDefaults = .standard
   ) -> Bool {
@@ -158,19 +204,19 @@ enum OpenAICompatiblePreferences {
     return true
   }
 
-  static func reset(in defaults: UserDefaults = .standard) {
+  public static func reset(in defaults: UserDefaults = .standard) {
     defaults.removeObject(forKey: configurationKey)
   }
 }
 
-struct OpenAICompatibleRuntimeConfiguration: Sendable {
-  let endpoint: String
-  let modelID: String
-  let bearerToken: String?
-  let analyticsProvider: String
-  let maxImagesPerRequest: Int
+public struct OpenAICompatibleRuntimeConfiguration: Sendable {
+  public let endpoint: String
+  public let modelID: String
+  public let bearerToken: String?
+  public let analyticsProvider: String
+  public let maxImagesPerRequest: Int
 
-  init(
+  public init(
     configuration: OpenAICompatibleConfiguration,
     bearerToken: String?,
     analyticsProvider: String = OpenAICompatiblePreferences.keychainProvider

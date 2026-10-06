@@ -725,6 +725,11 @@ final class StorageManager: StorageManaging, @unchecked Sendable {
             """)
         print("✅ Added is_skipped column to day_goals")
       }
+
+      // JerryZLiu/Dayflow#285: collapse already-stored Processing failed stacks
+      // from the old retry loop. Overlapping replacement still always
+      // soft-deletes failed cards in the live window.
+      try db.execute(sql: TimelineReplacementPolicy.historicalDuplicateFailedCardsSQL)
     }
   }
 

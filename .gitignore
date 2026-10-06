@@ -27,6 +27,8 @@ agents.md
 tools/*
 !tools/dayflow-cli/
 !tools/dayflow-cli/**
+!tools/timeline-kernel/
+!tools/timeline-kernel/**
 
 # Eval frameworks
 claudeeval/
@@ -34,6 +36,7 @@ codexeval/
 
 # Dayflow CLI SwiftPM artifacts
 tools/dayflow-cli/.build/
+tools/timeline-kernel/.build/
 tools/dayflow-cli/fixtures/chunks.sqlite
 tools/dayflow-cli/fixtures/chunks.sqlite-wal
 tools/dayflow-cli/fixtures/chunks.sqlite-shm

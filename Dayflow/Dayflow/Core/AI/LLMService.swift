@@ -868,7 +868,8 @@ final class LLMService: LLMServicing {
 
         // Convert TimelineCards to ActivityCardData for context
         let existingActivityCards = existingTimelineCards.filter { card in
-          card.category != "System"
+          TimelineReplacementPolicy.isUsableActivityContext(
+            category: card.category, title: card.title)
         }.map { card in
           ActivityCardData(
             startTime: card.startTimestamp,
@@ -1104,7 +1105,7 @@ final class LLMService: LLMServicing {
       endTimestamp: endTimeStr,
       category: "System",
       subcategory: "Error",
-      title: "Processing failed",
+      title: TimelineReplacementPolicy.processingFailedTitle,
       summary:
         "Failed to process \(duration) minutes of recording from \(startTimeStr) to \(endTimeStr). \(humanError) Your recording is safe and can be reprocessed.",
       detailedSummary:

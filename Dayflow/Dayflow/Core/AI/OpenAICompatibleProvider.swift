@@ -117,7 +117,11 @@ final class OpenAICompatibleProvider: ChatGPTTimelinePromptSupporting {
           image_url: .init(url: "data:image/jpeg;base64,\(jpeg.base64EncodedString())")))
       validFrameCount += 1
     }
-    guard validFrameCount > 0 else { throw invalidOutput("No readable screenshots to transcribe.") }
+    guard validFrameCount > 0 else {
+      throw invalidOutput(
+        "Failed to describe any screenshots. Check that your OpenAI-compatible endpoint is reachable, the model supports vision, and any required API key is valid."
+      )
+    }
     let prompt = buildScreenshotTranscriptionPrompt(
       numFrames: validFrameCount, duration: formatSeconds(duration),
       startTime: "00:00:00", endTime: formatSeconds(duration),

@@ -491,10 +491,11 @@ extension OllamaProvider {
 
     guard !frameDescriptions.isEmpty else {
       throw NSError(
-        domain: usesOpenAICompatibleTransport ? "OpenAICompatibleProvider" : "OllamaProvider",
+        domain: "OllamaProvider",
         code: 11,
         userInfo: [
-          NSLocalizedDescriptionKey: screenshotDescriptionFailureMessage()
+          NSLocalizedDescriptionKey:
+            "Failed to describe any screenshots. Please check that Ollama/LMStudio is running."
         ]
       )
     }

@@ -317,12 +317,13 @@ final class ProvidersSettingsViewModel: ObservableObject {
   var localMaxOutputTokensStatusText: String {
     if let override = OllamaProvider.storedMaxOutputTokensOverride() {
       return String(
-        localized: "Override: \(override) tokens. Local, OpenAI-compatible, Gemini, and Gemma calls use this cap."
+        localized:
+          "Override: \(override) tokens. Local and OpenAI-compatible calls use this cap (\(OllamaProvider.minPersistedMaxOutputTokens)–\(OllamaProvider.maxPersistedMaxOutputTokens))."
       )
     }
     return String(
       localized:
-        "No override. Local and OpenAI-compatible calls use \(OllamaProvider.defaultMaxOutputTokens); Gemini and Gemma keep their own caps until you save a value."
+        "No override. Local calls use \(OllamaProvider.defaultMaxOutputTokens) and OpenAI-compatible calls use \(OllamaProvider.openAICompatibleDefaultMaxOutputTokens)."
     )
   }
 
@@ -346,10 +347,30 @@ final class ProvidersSettingsViewModel: ObservableObject {
   }
 
   func saveLocalMaxOutputTokens() {
+    guard !isLocalMaxOutputTokensSaved else { return }
+
     let trimmed = localMaxOutputTokensText.trimmingCharacters(in: .whitespacesAndNewlines)
     guard let value = Int(trimmed), value > 0 else {
       localMaxOutputTokensValidationMessage = String(
         localized: "Enter a positive whole number.")
+      isLocalMaxOutputTokensSaved = false
+      return
+    }
+    if OllamaProvider.storedMaxOutputTokensOverride() == nil,
+      value == OllamaProvider.defaultMaxOutputTokens
+    {
+      isLocalMaxOutputTokensSaved = true
+      localMaxOutputTokensValidationMessage = nil
+      return
+    }
+    guard
+      value >= OllamaProvider.minPersistedMaxOutputTokens,
+      value <= OllamaProvider.maxPersistedMaxOutputTokens
+    else {
+      localMaxOutputTokensValidationMessage = String(
+        localized:
+          "Enter a value between \(OllamaProvider.minPersistedMaxOutputTokens) and \(OllamaProvider.maxPersistedMaxOutputTokens)."
+      )
       isLocalMaxOutputTokensSaved = false
       return
     }

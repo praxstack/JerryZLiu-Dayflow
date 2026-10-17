@@ -243,6 +243,18 @@ final class ProvidersSettingsViewModelTests: XCTestCase {
       UserDefaults.standard.integer(forKey: OllamaProvider.maxOutputTokensDefaultsKey), 8000)
   }
 
+  func testSavingDisplayedDefaultWithoutOverrideDoesNotWriteDefaults() {
+    UserDefaults.standard.removeObject(forKey: OllamaProvider.maxOutputTokensDefaultsKey)
+    let viewModel = ProvidersSettingsViewModel()
+    XCTAssertFalse(viewModel.hasLocalMaxOutputTokensOverride)
+    XCTAssertTrue(viewModel.isLocalMaxOutputTokensSaved)
+
+    viewModel.saveLocalMaxOutputTokens()
+
+    XCTAssertNil(UserDefaults.standard.object(forKey: OllamaProvider.maxOutputTokensDefaultsKey))
+    XCTAssertTrue(viewModel.isLocalMaxOutputTokensSaved)
+  }
+
   func testReloadLocalProviderSettingsPicksUpMaxOutputTokensOverride() {
     let viewModel = ProvidersSettingsViewModel()
     UserDefaults.standard.set(16000, forKey: OllamaProvider.maxOutputTokensDefaultsKey)

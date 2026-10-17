@@ -109,7 +109,7 @@ final class GeminiAPIHelper {
         ]
       ],
       "generationConfig": [
-        "maxOutputTokens": OllamaProvider.resolvedMaxOutputTokens(fallback: 4096),
+        "maxOutputTokens": 4096,
         "thinkingConfig": ["thinkingLevel": "high"],
       ],
     ]

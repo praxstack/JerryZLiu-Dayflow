@@ -18,7 +18,8 @@ final class OpenAICompatibleProvider: ChatGPTTimelinePromptSupporting {
 
   func makeRequest(
     content: [MessageContent],
-    maxTokens: Int = OllamaProvider.resolvedMaxOutputTokens()
+    maxTokens: Int = OllamaProvider.resolvedMaxOutputTokens(
+      fallback: OllamaProvider.openAICompatibleDefaultMaxOutputTokens)
   ) -> ChatRequest {
     var request = ChatRequest(
       model: configuration.modelID,

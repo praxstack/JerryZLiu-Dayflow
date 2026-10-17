@@ -32,7 +32,10 @@ final class OpenAICompatibleProviderTests: XCTestCase {
     let overridden = provider.makeRequest(content: [], maxTokens: 32000)
     XCTAssertEqual(overridden.max_tokens, 32000)
     let defaulted = provider.makeRequest(content: [])
-    XCTAssertEqual(defaulted.max_tokens, OllamaProvider.resolvedMaxOutputTokens())
+    XCTAssertEqual(
+      defaulted.max_tokens,
+      OllamaProvider.resolvedMaxOutputTokens(
+        fallback: OllamaProvider.openAICompatibleDefaultMaxOutputTokens))
   }
 
   func testScreenshotsTravelTogetherWithActualTimestamps() async throws {

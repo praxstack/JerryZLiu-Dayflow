@@ -5,7 +5,7 @@ extension GeminiDirectProvider {
 
   func generateText(
     prompt: String,
-    maxOutputTokens: Int = OllamaProvider.resolvedMaxOutputTokens(fallback: 8192)
+    maxOutputTokens: Int = 8192
   ) async throws
     -> (text: String, log: LLMCall)
   {

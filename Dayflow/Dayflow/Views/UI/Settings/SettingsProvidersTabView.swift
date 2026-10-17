@@ -33,7 +33,9 @@ struct SettingsProvidersTabView: View {
       }
 
       currentConfigurationSection
-      localMaxOutputTokensSection
+      if viewModel.currentProvider == .local {
+        localMaxOutputTokensSection
+      }
       connectionHealthSection
       failoverRoutingSection
 
@@ -169,7 +171,7 @@ struct SettingsProvidersTabView: View {
       title: String(localized: "Max output tokens"),
       subtitle: String(
         localized:
-          "Raise this for reasoning models that otherwise return empty titles. Saving updates the same setting local generation reads for max_tokens."
+          "Raise this for local reasoning models that otherwise return empty titles. Applies to local and OpenAI-compatible generation only."
       )
     ) {
       VStack(alignment: .leading, spacing: 12) {
@@ -186,7 +188,9 @@ struct SettingsProvidersTabView: View {
             viewModel.markLocalMaxOutputTokensEdited()
           }
           .onSubmit {
-            viewModel.saveLocalMaxOutputTokens()
+            if !viewModel.isLocalMaxOutputTokensSaved {
+              viewModel.saveLocalMaxOutputTokens()
+            }
             isLocalMaxOutputTokensFocused = false
           }
 

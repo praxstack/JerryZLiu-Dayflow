@@ -9,6 +9,12 @@ extension OllamaProvider {
   /// Default output cap kept low because long generations are slow on local hardware.
   static let defaultMaxOutputTokens = 4000
 
+  /// Historical OpenAI-compatible default before the shared override existed.
+  static let openAICompatibleDefaultMaxOutputTokens = 8000
+
+  static let minPersistedMaxOutputTokens = 256
+  static let maxPersistedMaxOutputTokens = 128_000
+
   /// Override for reasoning models that need more headroom (JerryZLiu/Dayflow#246).
   /// Settings > Providers reads and writes this key; `defaults write` still works:
   /// `defaults write teleportlabs.com.Dayflow llmLocalMaxOutputTokens -int 32000`
@@ -20,11 +26,16 @@ extension OllamaProvider {
   }
 
   static func persistMaxOutputTokens(_ value: Int?, to defaults: UserDefaults = .standard) {
-    if let value, value > 0 {
-      defaults.set(value, forKey: maxOutputTokensDefaultsKey)
-    } else {
+    guard let value else {
       defaults.removeObject(forKey: maxOutputTokensDefaultsKey)
+      return
     }
+    guard value > 0 else {
+      defaults.removeObject(forKey: maxOutputTokensDefaultsKey)
+      return
+    }
+    let clamped = min(max(value, minPersistedMaxOutputTokens), maxPersistedMaxOutputTokens)
+    defaults.set(clamped, forKey: maxOutputTokensDefaultsKey)
   }
 
   static func resolvedMaxOutputTokens(

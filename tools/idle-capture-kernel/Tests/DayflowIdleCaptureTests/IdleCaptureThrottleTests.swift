@@ -90,6 +90,16 @@ final class IdleCaptureShouldCaptureTests: XCTestCase {
     )
   }
 
+  func testGateAllowsSmallTimerJitterBelowInterval() {
+    XCTAssertTrue(
+      IdleCaptureThrottle.shouldCapture(
+        now: t0.addingTimeInterval(9.8),
+        lastCapture: t0,
+        interval: 10
+      )
+    )
+  }
+
   func testFiresWhenTimeSinceLastCaptureExceedsInterval() {
     XCTAssertTrue(
       IdleCaptureThrottle.shouldCapture(
@@ -125,6 +135,20 @@ final class IdleCaptureRescheduleTests: XCTestCase {
 
 final class IdleCaptureDecisionTests: XCTestCase {
   private let t0 = Date(timeIntervalSince1970: 1_700_000_000)
+
+  func testDisabledUsesBaseIntervalForCaptureGate() {
+    let disabled = IdleCaptureThrottle.decide(
+      now: t0.addingTimeInterval(10),
+      lastCapture: t0,
+      idleSeconds: 600,
+      enabled: false,
+      baseInterval: 10,
+      scheduledInterval: 30
+    )
+    XCTAssertEqual(disabled.interval, 10)
+    XCTAssertTrue(disabled.shouldCapture)
+    XCTAssertEqual(disabled.rescheduleTo, 10)
+  }
 
   func testDecideCombinesIdleIntervalAndElapsedTime() {
     let crossing = IdleCaptureThrottle.decide(
@@ -242,8 +266,8 @@ final class IdleCapturePreferencesTests: XCTestCase {
     super.tearDown()
   }
 
-  func testDefaultsToEnabledWhenUnset() {
-    XCTAssertTrue(IdleCapturePreferences.isEnabled(in: defaults))
+  func testDefaultsToDisabledWhenUnset() {
+    XCTAssertFalse(IdleCapturePreferences.isEnabled(in: defaults))
   }
 
   func testPersistsDisabledAndReReadsIt() {

@@ -24,7 +24,7 @@ public enum IdleCapturePreferences {
   public static let enabledKey = "idleCaptureThrottleEnabled"
 
   public static func isEnabled(in defaults: UserDefaults = .standard) -> Bool {
-    defaults.object(forKey: enabledKey) as? Bool ?? true
+    defaults.object(forKey: enabledKey) as? Bool ?? false
   }
 
   public static func setEnabled(_ enabled: Bool, in defaults: UserDefaults = .standard) {
@@ -55,6 +55,9 @@ public struct IdleCaptureDecision: Equatable {
 /// Pure idle-capture policy. Free of ScreenCaptureKit, AppKit, and
 /// DispatchSourceTimer so Linux `swift test` can cover it.
 public enum IdleCaptureThrottle {
+  /// Small slack so repeating timer drift does not skip captures at the boundary.
+  public static let captureGateJitterSeconds: TimeInterval = 0.25
+
   /// Effective capture cadence given idle heuristics.
   ///
   /// Missing idle readings never throttle (avoid starving real activity).
@@ -82,7 +85,8 @@ public enum IdleCaptureThrottle {
     interval: TimeInterval
   ) -> Bool {
     guard let lastCapture else { return true }
-    return now.timeIntervalSince(lastCapture) >= interval
+    let elapsed = now.timeIntervalSince(lastCapture)
+    return elapsed + captureGateJitterSeconds >= interval
   }
 
   /// Returns `target` when the repeating timer must be rebuilt.
@@ -119,7 +123,12 @@ public enum IdleCaptureThrottle {
       idleThresholdSeconds: idleThresholdSeconds,
       enabled: enabled
     )
-    let captureGate = scheduledInterval ?? target
+    let captureGate: TimeInterval
+    if enabled {
+      captureGate = scheduledInterval ?? target
+    } else {
+      captureGate = baseInterval
+    }
     return IdleCaptureDecision(
       shouldCapture: shouldCapture(now: now, lastCapture: lastCapture, interval: captureGate),
       interval: target,

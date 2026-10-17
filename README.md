@@ -138,7 +138,8 @@ AI agents and MCP contributors: see [AGENTS.md](AGENTS.md).
 
 ### CI
 
-Pull requests run `DayflowTests` on macOS via GitHub Actions. Locally:
+GitHub Actions CI for pull requests is not wired on this branch yet; run locally
+on macOS (15.1+ for `DayflowTests`):
 
 ```bash
 xcodebuild test -project Dayflow/Dayflow.xcodeproj -scheme Dayflow \

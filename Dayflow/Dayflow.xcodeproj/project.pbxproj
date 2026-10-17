@@ -43,7 +43,7 @@
 		DFCA200C2F9C0001000000BC /* Embed Dayflow CLI */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
-			dstPath = Helpers;
+			dstPath = Contents/Helpers;
 			dstSubfolderSpec = 1;
 			files = (
 				DFCA200D2F9C0001000000BD /* dayflow in Embed Dayflow CLI */,

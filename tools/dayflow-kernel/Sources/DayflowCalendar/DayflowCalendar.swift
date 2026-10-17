@@ -48,7 +48,6 @@ public enum DayflowCalendar {
   public static func dayKeyFormatter(timeZone: TimeZone) -> DateFormatter {
     let formatter = DateFormatter()
     formatter.dateFormat = "yyyy-MM-dd"
-    formatter.locale = Locale(identifier: "en_US_POSIX")
     formatter.timeZone = timeZone
     return formatter
   }

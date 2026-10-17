@@ -70,6 +70,8 @@ enum DailyRecapGeneratorError: LocalizedError {
 final class DailyRecapGenerator {
   static let shared = DailyRecapGenerator()
 
+  private static let geminiRecapMaxOutputTokens = 8192
+
   private static var localRecapMaxOutputTokens: Int {
     OllamaProvider.resolvedMaxOutputTokens(fallback: 8192)
   }
@@ -382,7 +384,7 @@ final class DailyRecapGenerator {
     let prompt = Self.makeLocalPrompt(day: context.sourceDayString, cards: context.cards)
     let (rawText, _) = try await provider.generateText(
       prompt: prompt,
-      maxOutputTokens: Self.localRecapMaxOutputTokens
+      maxOutputTokens: Self.geminiRecapMaxOutputTokens
     )
     let parsed = try Self.parseLocalResponse(rawText)
     return try makeDraft(from: parsed, context: context, metadata: metadata)

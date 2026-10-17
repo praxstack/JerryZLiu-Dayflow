@@ -7,25 +7,23 @@
 default 4000). Settings > Providers persists that same key through
 `OllamaProvider.persistMaxOutputTokens`.
 
-Call sites that now go through that resolver:
+Call sites that go through the resolver:
 
-- Ollama / OpenAI-compatible `max_tokens` (fallback 4000; was hardcoded 8000
-  on the OpenAI-compatible path)
-- Gemini `generateText` / dashboard chat (fallback 8192)
-- Gemini activity cards + transcription (fallback 65536)
-- Gemini connection test (fallback 4096)
-- Gemma backup frame/summary/title/merge calls (fallbacks 2048/1024/256/512)
-- Daily recap Gemini/local generation (fallback 8192)
+- Ollama chat / timeline `max_tokens` (fallback 4000)
+- OpenAI-compatible `makeRequest` (fallback 8000)
+- Local daily recap generation (fallback 8192)
+
+Gemini, Gemma, and Gemini daily recap keep fixed caps and do not read the override.
+
+Persisted overrides are clamped to 256–128000. Settings > Providers shows the
+control only when the active provider is Local. Saving the displayed default
+without an existing override is a no-op.
 
 Override:
 
 ```
 defaults write teleportlabs.com.Dayflow llmLocalMaxOutputTokens -int 32000
 ```
-
-Settings > Providers also has a Max output tokens field (Save / Reset) bound
-to the same key. Reset removes the override so Gemini/Gemma keep per-call
-fallbacks.
 
 ## What this does not ship
 

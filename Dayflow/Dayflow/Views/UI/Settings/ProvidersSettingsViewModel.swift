@@ -323,7 +323,7 @@ final class ProvidersSettingsViewModel: ObservableObject {
     }
     return String(
       localized:
-        "No override. Local calls use \(OllamaProvider.defaultMaxOutputTokens) and OpenAI-compatible calls use \(OllamaProvider.openAICompatibleDefaultMaxOutputTokens)."
+        "No override. Ollama chat defaults to \(OllamaProvider.defaultMaxOutputTokens), OpenAI-compatible requests default to \(OllamaProvider.openAICompatibleDefaultMaxOutputTokens), and local daily recap uses 8192. Gemini and Gemma keep their own caps."
     )
   }
 

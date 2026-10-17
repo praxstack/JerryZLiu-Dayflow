@@ -225,6 +225,7 @@ final class ProvidersSettingsViewModelTests: XCTestCase {
     let viewModel = ProvidersSettingsViewModel()
 
     viewModel.localMaxOutputTokensText = "0"
+    viewModel.markLocalMaxOutputTokensEdited()
     viewModel.saveLocalMaxOutputTokens()
     XCTAssertEqual(
       UserDefaults.standard.integer(forKey: OllamaProvider.maxOutputTokensDefaultsKey), 8000)
@@ -232,12 +233,14 @@ final class ProvidersSettingsViewModelTests: XCTestCase {
     XCTAssertNotNil(viewModel.localMaxOutputTokensValidationMessage)
 
     viewModel.localMaxOutputTokensText = "abc"
+    viewModel.markLocalMaxOutputTokensEdited()
     viewModel.saveLocalMaxOutputTokens()
     XCTAssertEqual(
       UserDefaults.standard.integer(forKey: OllamaProvider.maxOutputTokensDefaultsKey), 8000)
     XCTAssertEqual(OllamaProvider.resolvedMaxOutputTokens(), 8000)
 
     viewModel.localMaxOutputTokensText = "-12"
+    viewModel.markLocalMaxOutputTokensEdited()
     viewModel.saveLocalMaxOutputTokens()
     XCTAssertEqual(
       UserDefaults.standard.integer(forKey: OllamaProvider.maxOutputTokensDefaultsKey), 8000)

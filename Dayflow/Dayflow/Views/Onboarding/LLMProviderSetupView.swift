@@ -509,13 +509,19 @@ struct LLMProviderSetupView: View {
                       .font(.custom("Figtree", size: 12))
                       .fontWeight(.semibold)
                       .foregroundColor(SettingsStyle.secondary)
-                    TextField(
-                      "15",
+                    Stepper(
                       value: $setupState.openAICompatibleMaxImages,
-                      format: .number
-                    )
-                    .textFieldStyle(.roundedBorder)
-                    .frame(maxWidth: 120)
+                      in: OpenAICompatibleScreenshotBudget.minimumLimit...OpenAICompatibleScreenshotBudget
+                        .maximumLimit
+                    ) {
+                      Text("\(setupState.openAICompatibleMaxImages)")
+                        .font(.custom("Figtree", size: 13))
+                        .frame(minWidth: 28, alignment: .leading)
+                    }
+                    .onChange(of: setupState.openAICompatibleMaxImages) {
+                      setupState.hasTestedConnection = false
+                      setupState.testSuccessful = false
+                    }
                     Text(
                       "Some gateways allow fewer than 15 images per request. Dayflow samples each batch down to this limit (1–15)."
                     )

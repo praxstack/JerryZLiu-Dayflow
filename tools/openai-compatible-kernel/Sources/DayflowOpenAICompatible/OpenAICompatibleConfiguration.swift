@@ -16,10 +16,11 @@ public enum OpenAICompatibleScreenshotBudget {
   }
 
   /// Evenly samples `items` down to `limit`, always keeping the first and last when possible.
+  /// A limit of 1 keeps the most recent item (last in chronological order).
   public static func select<T>(_ items: [T], limit: Int) -> [T] {
     guard !items.isEmpty else { return [] }
     let count = min(clamp(limit), items.count)
-    if count == 1 { return [items[0]] }
+    if count == 1 { return [items[items.count - 1]] }
     return (0..<count).map { index in
       items[index * (items.count - 1) / (count - 1)]
     }
@@ -47,7 +48,8 @@ public enum OpenAICompatibleHTTPErrorFormatter {
     if let error = dict["error"] {
       if let nested = error as? [String: Any], let message = nested["message"] as? String {
         let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? nil : trimmed
+        guard !trimmed.isEmpty else { return nil }
+        return appendOpenRouterRaw(trimmed, metadata: nested["metadata"])
       }
       if let message = error as? String {
         let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -59,6 +61,21 @@ public enum OpenAICompatibleHTTPErrorFormatter {
       return trimmed.isEmpty ? nil : trimmed
     }
     return nil
+  }
+
+  private static let rawMetadataMaxLength = 500
+
+  private static func appendOpenRouterRaw(_ message: String, metadata: Any?) -> String {
+    guard let metadata = metadata as? [String: Any],
+      let raw = metadata["raw"] as? String
+    else { return message }
+    let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else { return message }
+    let snippet =
+      trimmed.count > rawMetadataMaxLength
+      ? String(trimmed.prefix(rawMetadataMaxLength)) + "…"
+      : trimmed
+    return "\(message) — \(snippet)"
   }
 }
 

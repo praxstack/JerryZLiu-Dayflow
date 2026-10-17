@@ -92,6 +92,7 @@ final class OpenAICompatibleConfigurationTests: XCTestCase {
     XCTAssertEqual(OpenAICompatibleScreenshotBudget.select(frames, limit: 15).last, 30)
     XCTAssertEqual(OpenAICompatibleScreenshotBudget.select(frames, limit: 8).count, 8)
     XCTAssertEqual(OpenAICompatibleScreenshotBudget.select(frames, limit: 8).last, 30)
+    XCTAssertEqual(OpenAICompatibleScreenshotBudget.select(frames, limit: 1), [30])
     XCTAssertEqual(OpenAICompatibleScreenshotBudget.select(Array(0..<5), limit: 15), [0, 1, 2, 3, 4])
     XCTAssertEqual(OpenAICompatibleScreenshotBudget.select([42], limit: 8), [42])
     XCTAssertEqual(OpenAICompatibleScreenshotBudget.select([Int](), limit: 8), [])
@@ -104,6 +105,16 @@ final class OpenAICompatibleConfigurationTests: XCTestCase {
     XCTAssertEqual(
       OpenAICompatibleHTTPErrorFormatter.userMessage(statusCode: 400, body: nested),
       "HTTP 400: max 8 images per request")
+
+    let openRouter = try JSONSerialization.data(withJSONObject: [
+      "error": [
+        "message": "Provider returned error",
+        "metadata": ["raw": "image count exceeds limit of 8"],
+      ]
+    ])
+    XCTAssertEqual(
+      OpenAICompatibleHTTPErrorFormatter.userMessage(statusCode: 400, body: openRouter),
+      "HTTP 400: Provider returned error — image count exceeds limit of 8")
 
     let topLevel = try JSONSerialization.data(withJSONObject: [
       "message": "too many attachments"

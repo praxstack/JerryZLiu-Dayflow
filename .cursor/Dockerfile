@@ -37,15 +37,12 @@ RUN apt-get update \
 ENV SWIFTLY_HOME_DIR=/opt/swiftly
 ENV SWIFTLY_BIN_DIR=/opt/swiftly/bin
 ENV SWIFTLY_TOOLCHAINS_DIR=/opt/swiftly/toolchains
-ENV PATH="/usr/local/bin:/opt/swiftly/bin:${PATH}"
+ENV PATH="/opt/swiftly/bin:${PATH}"
 
 RUN curl -fsSL https://download.swift.org/swiftly/linux/swiftly-$(uname -m).tar.gz \
       | tar xz -C /tmp \
     && /tmp/swiftly init --no-modify-profile --skip-install --assume-yes \
     && /opt/swiftly/bin/swiftly install --use 6.3.3 \
-    && ln -sf /opt/swiftly/toolchains/6.3.3/usr/bin/swift /usr/local/bin/swift \
-    && ln -sf /opt/swiftly/toolchains/6.3.3/usr/bin/swiftc /usr/local/bin/swiftc \
-    && ln -sf /opt/swiftly/bin/swiftly /usr/local/bin/swiftly \
     && rm -rf /tmp/swiftly /tmp/.swift-version /.swift-version
 
 USER ubuntu

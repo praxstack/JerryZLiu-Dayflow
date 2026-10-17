@@ -12,6 +12,9 @@ elif [[ -f "${HOME}/.local/share/swiftly/env.sh" ]]; then
   # shellcheck disable=SC1091
   source "${HOME}/.local/share/swiftly/env.sh"
 fi
+export SWIFTLY_HOME_DIR="${SWIFTLY_HOME_DIR:-/opt/swiftly}"
+export SWIFTLY_BIN_DIR="${SWIFTLY_BIN_DIR:-${SWIFTLY_HOME_DIR}/bin}"
+export SWIFTLY_TOOLCHAINS_DIR="${SWIFTLY_TOOLCHAINS_DIR:-${SWIFTLY_HOME_DIR}/toolchains}"
 
 if ! command -v swift >/dev/null 2>&1; then
   echo "Swift is not installed. The Cloud Agent base image should include the Swift toolchain." >&2

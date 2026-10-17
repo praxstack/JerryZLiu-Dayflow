@@ -138,17 +138,29 @@ if [[ -d "${SPARKLE_DIR}" ]]; then
       "${SPARKLE_DIR}/XPCServices/Downloader.xpc"
   fi
   if [[ -f "${SPARKLE_DIR}/Autoupdate" ]]; then
-    # Sparkle ships Autoupdate as a universal (arm64+x86_64) binary even in
-    # its latest release. Dayflow itself is arm64-only, so the leftover
-    # x86_64 slice serves no purpose here and triggers macOS's "Support
-    # Ending for Intel-based Apps" deprecation warning on Apple Silicon.
-    if lipo -info "${SPARKLE_DIR}/Autoupdate" 2>/dev/null | grep -q x86_64; then
+    # Sparkle ships Autoupdate as a universal (arm64+x86_64) binary. Only
+    # drop the unused slice when the main app is single-arch so Autoupdate
+    # stays compatible with the release (arm64-only or x86_64-only builds).
+    MAIN_EXEC="${SANITIZED_APP}/Contents/MacOS/${APP_NAME}"
+    autoupdate_thin_arch=""
+    if [[ -f "${MAIN_EXEC}" ]]; then
+      app_lipo=$(lipo -info "${MAIN_EXEC}" 2>/dev/null || true)
+      autoupdate_lipo=$(lipo -info "${SPARKLE_DIR}/Autoupdate" 2>/dev/null || true)
+      if [[ "${app_lipo}" != *x86_64* && "${app_lipo}" == *arm64* && "${autoupdate_lipo}" == *x86_64* ]]; then
+        autoupdate_thin_arch=arm64
+      elif [[ "${app_lipo}" != *arm64* && "${app_lipo}" == *x86_64* && "${autoupdate_lipo}" == *arm64* ]]; then
+        autoupdate_thin_arch=x86_64
+      fi
+    fi
+    if [[ -n "${autoupdate_thin_arch}" ]]; then
       # lipo cannot safely use the same path as input and output; it can
       # truncate or refuse the file. Write a temp then replace.
-      thin_out="$(mktemp "${TMPDIR:-/tmp}/Autoupdate.arm64.XXXXXX")"
-      lipo -thin arm64 "${SPARKLE_DIR}/Autoupdate" -output "${thin_out}"
+      autoupdate_mode=$(stat -f '%Lp' "${SPARKLE_DIR}/Autoupdate" 2>/dev/null || echo 755)
+      thin_out="$(mktemp "${TMPDIR:-/tmp}/Autoupdate.${autoupdate_thin_arch}.XXXXXX")"
+      chmod "${autoupdate_mode}" "${thin_out}" 2>/dev/null || chmod 755 "${thin_out}"
+      lipo -thin "${autoupdate_thin_arch}" "${SPARKLE_DIR}/Autoupdate" -output "${thin_out}"
       mv -f "${thin_out}" "${SPARKLE_DIR}/Autoupdate"
-      chmod +x "${SPARKLE_DIR}/Autoupdate"
+      chmod "${autoupdate_mode}" "${SPARKLE_DIR}/Autoupdate" 2>/dev/null || chmod 755 "${SPARKLE_DIR}/Autoupdate"
     fi
     codesign -vvv --force -o runtime --sign "${SIGN_ID}" \
       "${SPARKLE_DIR}/Autoupdate"

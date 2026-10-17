@@ -13,14 +13,17 @@ if ! git remote get-url upstream >/dev/null 2>&1; then
   git remote add upstream "$UPSTREAM_URL"
 fi
 
-git fetch --quiet origin main
-git fetch --quiet upstream main
+origin_branch="${ORIGIN_REF#refs/remotes/origin/}"
+upstream_branch="${UPSTREAM_REF#refs/heads/}"
 
-origin_sha="$(git rev-parse origin/main)"
-upstream_sha="$(git rev-parse upstream/main)"
+git fetch --quiet origin "$origin_branch"
+git fetch --quiet upstream "$upstream_branch"
 
-echo "origin/main   $origin_sha"
-echo "upstream/main $upstream_sha"
+origin_sha="$(git rev-parse "$ORIGIN_REF")"
+upstream_sha="$(git rev-parse "upstream/$upstream_branch")"
+
+echo "origin/$origin_branch   $origin_sha"
+echo "upstream/$upstream_branch $upstream_sha"
 
 if git merge-base --is-ancestor "$upstream_sha" "$origin_sha"; then
   echo "OK: origin/main contains upstream/main"

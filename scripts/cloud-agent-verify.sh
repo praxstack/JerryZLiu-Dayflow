@@ -29,8 +29,8 @@ if [[ ! -x "$DAYFLOW_BIN" ]]; then
 fi
 
 if [[ ! -f "$FIXTURE_DB" ]]; then
-  echo "Fixture database missing at $FIXTURE_DB — generating." >&2
-  bash "$ROOT/tools/dayflow-cli/fixtures/create_fixture_db.sh"
+  echo "Fixture database missing at $FIXTURE_DB (run scripts/cloud-agent-install.sh first)." >&2
+  exit 1
 fi
 
 export DAYFLOW_DB="$FIXTURE_DB"
@@ -87,14 +87,14 @@ fi
 
 echo "[verify] MCP initialize"
 python3 - "$DAYFLOW_BIN" <<'PY'
-import json, os, subprocess, sys, select
+import json, subprocess, sys, select, time
+
 binary = sys.argv[1]
-env = os.environ.copy()
 proc = subprocess.Popen(
     [binary, "mcp"],
     stdin=subprocess.PIPE,
     stdout=subprocess.PIPE,
-    stderr=subprocess.PIPE,
+    stderr=subprocess.DEVNULL,
 )
 assert proc.stdin is not None and proc.stdout is not None
 request = {
@@ -109,13 +109,30 @@ request = {
 }
 proc.stdin.write((json.dumps(request) + "\n").encode())
 proc.stdin.flush()
-ready, _, _ = select.select([proc.stdout], [], [], 5)
-if not ready:
-    proc.kill()
+
+
+def readline_deadline(stream, deadline: float) -> bytes:
+    chunks: list[bytes] = []
+    while time.monotonic() < deadline:
+        remaining = deadline - time.monotonic()
+        ready, _, _ = select.select([stream], [], [], max(0.0, remaining))
+        if not ready:
+            break
+        chunk = stream.read(1)
+        if not chunk:
+            break
+        chunks.append(chunk)
+        if chunk == b"\n":
+            return b"".join(chunks)
     raise SystemExit("MCP initialize timed out")
-line = proc.stdout.readline()
+
+
+deadline = time.monotonic() + 5
+line = readline_deadline(proc.stdout, deadline)
 proc.kill()
 payload = json.loads(line.decode())
+if payload.get("jsonrpc") != "2.0":
+    raise SystemExit(f"unexpected MCP jsonrpc: {payload}")
 if payload.get("id") != 1:
     raise SystemExit(f"unexpected MCP id: {payload}")
 name = payload.get("result", {}).get("serverInfo", {}).get("name")

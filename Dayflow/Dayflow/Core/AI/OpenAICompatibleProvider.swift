@@ -118,39 +118,45 @@ final class OpenAICompatibleProvider: ChatGPTTimelinePromptSupporting {
       validFrameCount += 1
     }
     guard validFrameCount > 0 else {
-      throw invalidOutput(
-        "Failed to describe any screenshots. Check that your OpenAI-compatible endpoint is reachable, the model supports vision, and any required API key is valid."
-      )
+      throw invalidOutput("No readable screenshots to transcribe.")
     }
     let prompt = buildScreenshotTranscriptionPrompt(
       numFrames: validFrameCount, duration: formatSeconds(duration),
       startTime: "00:00:00", endTime: formatSeconds(duration),
       frameTiming: "They are in chronological order, each labeled with its actual timestamp.")
-    return try await generate(
-      prompt: prompt, images: images, operation: "transcribe_screenshots", batchId: batchId
-    ) { output in
-      let response = try self.transport.parseJSONResponse(
-        SegmentMergeResponse.self, from: Data(self.cleanJSON(output).utf8))
-      if let error = self.validateSegments(response.segments, duration: duration) {
-        throw self.invalidOutput(error)
-      }
-      return try response.segments.sorted {
-        self.parseVideoTimestamp($0.start) < self.parseVideoTimestamp($1.start)
-      }.map { segment in
-        let description = segment.description.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !description.isEmpty else {
-          throw self.invalidOutput("Segment description is empty.")
+    do {
+      return try await generate(
+        prompt: prompt, images: images, operation: "transcribe_screenshots", batchId: batchId
+      ) { output in
+        let response = try self.transport.parseJSONResponse(
+          SegmentMergeResponse.self, from: Data(self.cleanJSON(output).utf8))
+        if let error = self.validateSegments(response.segments, duration: duration) {
+          throw self.invalidOutput(error)
         }
-        let start = max(0, self.parseVideoTimestamp(segment.start))
-        let end = min(Int(duration), self.parseVideoTimestamp(segment.end))
-        guard end > start else { throw self.invalidOutput("Segment has no duration.") }
-        return Observation(
-          id: nil, batchId: batchId ?? -1,
-          startTs: Int(batchStartTime.timeIntervalSince1970) + start,
-          endTs: Int(batchStartTime.timeIntervalSince1970) + end,
-          observation: description, metadata: nil, llmModel: self.configuration.modelID,
-          createdAt: Date())
+        return try response.segments.sorted {
+          self.parseVideoTimestamp($0.start) < self.parseVideoTimestamp($1.start)
+        }.map { segment in
+          let description = segment.description.trimmingCharacters(in: .whitespacesAndNewlines)
+          guard !description.isEmpty else {
+            throw self.invalidOutput("Segment description is empty.")
+          }
+          let start = max(0, self.parseVideoTimestamp(segment.start))
+          let end = min(Int(duration), self.parseVideoTimestamp(segment.end))
+          guard end > start else { throw self.invalidOutput("Segment has no duration.") }
+          return Observation(
+            id: nil, batchId: batchId ?? -1,
+            startTs: Int(batchStartTime.timeIntervalSince1970) + start,
+            endTs: Int(batchStartTime.timeIntervalSince1970) + end,
+            observation: description, metadata: nil, llmModel: self.configuration.modelID,
+            createdAt: Date())
+        }
       }
+    } catch {
+      try Task.checkCancellation()
+      if error is CancellationError { throw error }
+      throw invalidOutput(
+        "Failed to describe any screenshots. Check that your OpenAI-compatible endpoint is reachable, the model supports vision, and any required API key is valid. (\(error.localizedDescription))"
+      )
     }
   }
 

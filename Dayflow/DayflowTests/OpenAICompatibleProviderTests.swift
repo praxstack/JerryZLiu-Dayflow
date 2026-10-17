@@ -27,6 +27,59 @@ final class OpenAICompatibleProviderTests: XCTestCase {
     }
   }
 
+  func testUnreadableScreenshotsReportLocalDecodeFailure() async {
+    let screenshots = [
+      Screenshot(
+        id: 1, capturedAt: 1000, filePath: "/tmp/dayflow-missing-\(UUID().uuidString).jpg",
+        fileSize: nil, idleSecondsAtCapture: nil, isDeleted: false)
+    ]
+    let provider = OpenAICompatibleProvider(configuration: configuration())
+    do {
+      _ = try await provider.transcribeScreenshots(
+        screenshots, batchStartTime: Date(timeIntervalSince1970: 1000), batchId: 1)
+      XCTFail("Expected unreadable screenshot failure")
+    } catch let error as NSError {
+      XCTAssertEqual(error.domain, "OpenAICompatibleProvider")
+      XCTAssertEqual(error.localizedDescription, "No readable screenshots to transcribe.")
+    } catch {
+      XCTFail("Unexpected error: \(error)")
+    }
+  }
+
+  func testTranscriptionRequestFailureSurfacesOpenAICompatibleHint() async throws {
+    let image = NSBitmapImageRep(
+      bitmapDataPlanes: nil, pixelsWide: 2, pixelsHigh: 2, bitsPerSample: 8,
+      samplesPerPixel: 3, hasAlpha: false, isPlanar: false, colorSpaceName: .deviceRGB,
+      bytesPerRow: 0, bitsPerPixel: 0)!
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent(
+      "\(UUID().uuidString).jpg")
+    try XCTUnwrap(image.representation(using: .jpeg, properties: [:])).write(to: url)
+    defer { try? FileManager.default.removeItem(at: url) }
+    let screenshots = [
+      Screenshot(
+        id: 1, capturedAt: 1000, filePath: url.path, fileSize: nil, idleSecondsAtCapture: nil,
+        isDeleted: false)
+    ]
+    let underlying = NSError(
+      domain: "OpenAICompatibleProvider", code: 401,
+      userInfo: [
+        NSLocalizedDescriptionKey: "OpenAI-compatible API request failed with status 401: bad key"
+      ])
+    let provider = OpenAICompatibleProvider(configuration: configuration()) { _, _, _ in
+      throw underlying
+    }
+    do {
+      _ = try await provider.transcribeScreenshots(
+        screenshots, batchStartTime: Date(timeIntervalSince1970: 1000), batchId: 1)
+      XCTFail("Expected transcription failure")
+    } catch let error as NSError {
+      XCTAssertEqual(error.domain, "OpenAICompatibleProvider")
+      XCTAssertTrue(
+        error.localizedDescription.contains("endpoint is reachable"))
+      XCTAssertTrue(error.localizedDescription.contains("401"))
+    }
+  }
+
   func testScreenshotsTravelTogetherWithActualTimestamps() async throws {
     let image = NSBitmapImageRep(
       bitmapDataPlanes: nil, pixelsWide: 2, pixelsHigh: 2, bitsPerSample: 8,

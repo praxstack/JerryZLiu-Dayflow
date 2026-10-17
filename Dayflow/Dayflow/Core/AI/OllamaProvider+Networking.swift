@@ -54,7 +54,7 @@ extension OllamaProvider {
     guard let resolvedURL = url ?? LocalEndpointUtilities.chatCompletionsURL(baseURL: endpoint)
     else {
       throw NSError(
-        domain: "OllamaProvider", code: 15,
+        domain: chatAPIErrorDomain, code: 15,
         userInfo: [NSLocalizedDescriptionKey: "Invalid local endpoint URL"])
     }
 
@@ -72,7 +72,7 @@ extension OllamaProvider {
   ) async throws -> ChatResponse {
     guard let url = LocalEndpointUtilities.chatCompletionsURL(baseURL: endpoint) else {
       throw NSError(
-        domain: "OllamaProvider", code: 15,
+        domain: chatAPIErrorDomain, code: 15,
         userInfo: [NSLocalizedDescriptionKey: "Invalid local endpoint URL"])
     }
 
@@ -140,17 +140,16 @@ extension OllamaProvider {
               httpStatus: httpResponse.statusCode, responseHeaders: responseHeaders,
               responseBody: data),
             finishedAt: Date(),
-            errorDomain: "OllamaProvider",
+            errorDomain: chatAPIErrorDomain,
             errorCode: httpResponse.statusCode,
             errorMessage: errorBody
           )
           didLogFailureThisAttempt = true
+          let failureMessage = chatAPIFailureMessage(
+            statusCode: httpResponse.statusCode, body: errorBody)
           throw NSError(
-            domain: "OllamaProvider", code: 4,
-            userInfo: [
-              NSLocalizedDescriptionKey:
-                "Ollama API request failed with status \(httpResponse.statusCode): \(errorBody)"
-            ])
+            domain: chatAPIErrorDomain, code: 4,
+            userInfo: [NSLocalizedDescriptionKey: failureMessage])
         }
 
         do {

@@ -2,6 +2,17 @@ import Foundation
 import GRDB
 import Sentry
 
+enum TimelineReviewCoverageMath {
+  /// Seconds of a card that fall inside a Dayflow day window (4 AM boundary).
+  static func effectiveDuration(
+    cardStart: Int, cardEnd: Int, dayStartTs: Int, dayEndTs: Int
+  ) -> Int {
+    let start = max(cardStart, dayStartTs)
+    let end = min(cardEnd, dayEndTs)
+    return max(end - start, 0)
+  }
+}
+
 extension StorageManager {
   func fetchReviewRatingSegments(overlapping startTs: Int, endTs: Int)
     -> [TimelineReviewRatingSegment]
@@ -189,12 +200,19 @@ extension StorageManager {
     var segmentIndex = 0
 
     for card in sortedCards {
-      let duration = card.end - card.start
+      let duration = TimelineReviewCoverageMath.effectiveDuration(
+        cardStart: card.start,
+        cardEnd: card.end,
+        dayStartTs: dayStartTs,
+        dayEndTs: dayEndTs
+      )
       if duration <= 0 { continue }
 
+      let reviewStart = max(card.start, dayStartTs)
+      let reviewEnd = min(card.end, dayEndTs)
       let covered = overlapSeconds(
-        start: card.start,
-        end: card.end,
+        start: reviewStart,
+        end: reviewEnd,
         segments: mergedSegments,
         segmentIndex: &segmentIndex
       )

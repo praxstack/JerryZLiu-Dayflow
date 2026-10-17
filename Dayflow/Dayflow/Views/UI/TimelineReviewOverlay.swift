@@ -628,9 +628,17 @@ struct TimelineReviewOverlay: View {
     for activity in activities {
       let start = Int(activity.startTime.timeIntervalSince1970)
       let end = Int(activity.endTime.timeIntervalSince1970)
-      let duration = max(end - start, 1)
+      let reviewStart = max(start, dayStartTs)
+      let reviewEnd = min(end, dayEndTs)
+      let duration = TimelineReviewCoverageMath.effectiveDuration(
+        cardStart: start,
+        cardEnd: end,
+        dayStartTs: dayStartTs,
+        dayEndTs: dayEndTs
+      )
+      if duration <= 0 { continue }
       let covered = overlapSeconds(
-        start: start, end: end, segments: mergedSegments, segmentIndex: &segmentIndex)
+        start: reviewStart, end: reviewEnd, segments: mergedSegments, segmentIndex: &segmentIndex)
       let coverageRatio = Double(covered) / Double(duration)
       if coverageRatio < 0.8 {
         unreviewed.append(activity)

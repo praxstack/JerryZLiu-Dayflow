@@ -112,18 +112,15 @@ proc.stdin.flush()
 
 
 def readline_deadline(stream, deadline: float) -> bytes:
-    chunks: list[bytes] = []
     while time.monotonic() < deadline:
         remaining = deadline - time.monotonic()
         ready, _, _ = select.select([stream], [], [], max(0.0, remaining))
         if not ready:
             break
-        chunk = stream.read(1)
-        if not chunk:
-            break
-        chunks.append(chunk)
-        if chunk == b"\n":
-            return b"".join(chunks)
+        line = stream.readline()
+        if line:
+            return line
+        break
     raise SystemExit("MCP initialize timed out")
 
 

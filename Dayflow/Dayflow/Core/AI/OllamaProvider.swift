@@ -50,6 +50,19 @@ final class OllamaProvider {
     injectedRuntimeConfiguration == nil ? .local : .openAICompatible
   }
 
+  var usesOpenAICompatibleTransport: Bool {
+    injectedRuntimeConfiguration != nil
+  }
+
+  func screenshotDescriptionFailureMessage() -> String {
+    if usesOpenAICompatibleTransport {
+      return
+        "Failed to describe any screenshots. Check that your OpenAI-compatible endpoint is reachable, the model supports vision, and any required API key is valid."
+    }
+    return
+      "Failed to describe any screenshots. Please check that Ollama/LMStudio is running."
+  }
+
   var authorizationBearerToken: String? {
     if let injectedRuntimeConfiguration {
       return injectedRuntimeConfiguration.bearerToken

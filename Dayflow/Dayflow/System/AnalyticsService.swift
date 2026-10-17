@@ -343,6 +343,11 @@ final class AnalyticsService {
   }
 
   func postHogDistinctIdForAppcast() -> String? {
+    currentDistinctId()
+  }
+
+  /// The PostHog distinct ID, or nil when analytics are opted out or the SDK has no identity yet.
+  func currentDistinctId() -> String? {
     guard isOptedIn else { return nil }
     let distinctId = PostHogSDK.shared.getDistinctId().trimmingCharacters(
       in: .whitespacesAndNewlines)
@@ -557,6 +562,10 @@ final class AnalyticsService {
       "os_version": osVersion,
       "device_model": device,
       "locale": locale,
+      // Locale.current reflects the app's supported localization, so it cannot
+      // tell us which languages users would prefer us to support next.
+      "preferred_language": Locale.preferredLanguages.first ?? "und",
+      "interface_language": Bundle.main.preferredLocalizations.first ?? "en",
       "time_zone": tz,
         // dynamic values will be updated later as needed
     ])

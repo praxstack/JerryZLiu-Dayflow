@@ -66,51 +66,52 @@ enum DailyRecapProvider: String, Codable, CaseIterable, Sendable {
   var displayName: String {
     switch self {
     case .dayflow:
-      return "Dayflow backend"
+      return String(localized: "Dayflow backend")
     case .local:
-      return "Local"
+      return String(localized: "Local")
     case .gemini:
-      return "Gemini"
+      return String(localized: "Gemini")
     case .chatgpt:
-      return "ChatGPT"
+      return String(localized: "ChatGPT")
     case .claude:
-      return "Claude"
+      return String(localized: "Claude")
     case .none:
-      return "No provider"
+      return String(localized: "No provider")
     }
   }
 
   var selectionLabel: String {
     switch self {
     case .dayflow:
-      return "Dayflow backend"
+      return String(localized: "Dayflow backend")
     case .local:
-      return "Local"
+      return String(localized: "Local")
     case .gemini:
-      return "Gemini 3.5 Flash"
+      return GeminiModelPreference.default.primary.displayName
     case .chatgpt:
-      return "GPT-5.4"
+      return String(localized: "GPT-6 Astra")
     case .claude:
-      return "Claude Opus"
+      return String(localized: "Claude Opus")
     case .none:
-      return "No provider selected (Daily off)"
+      return String(localized: "No provider selected (Daily off)")
     }
   }
 
   var pickerSubtitle: String {
     switch self {
     case .dayflow:
-      return "Uses Dayflow's hosted service for best performance."
+      return String(localized: "Uses Dayflow's hosted service for best performance.")
     case .local:
-      return "Uses Ollama, LM Studio, or another local-compatible server on this Mac."
+      return String(
+        localized: "Uses Ollama, LM Studio, or another local-compatible server on this Mac.")
     case .gemini:
-      return "Gemini 3.5 Flash"
+      return GeminiModelPreference.default.primary.displayName
     case .chatgpt:
-      return "GPT-5.4"
+      return String(localized: "GPT-6 Astra")
     case .claude:
-      return "Claude Opus"
+      return String(localized: "Claude Opus")
     case .none:
-      return "Turns off Daily recap generation until you pick another provider."
+      return String(localized: "Turns off Daily recap generation until you pick another provider.")
     }
   }
 
@@ -136,9 +137,9 @@ enum DailyRecapProvider: String, Codable, CaseIterable, Sendable {
     case .local:
       return Self.currentLocalModelID()
     case .gemini:
-      return GeminiModel.flash36.rawValue
+      return GeminiModelPreference.default.primary.rawValue
     case .chatgpt:
-      return "gpt-5.4"
+      return "gpt-6-astra"
     case .claude:
       return "opus"
     case .none:
@@ -206,17 +207,19 @@ struct DailyStandupGenerationMetadata: Codable, Equatable, Sendable {
   var displayLabel: String {
     switch provider {
     case .dayflow:
-      return "Dayflow backend"
+      return String(localized: "Dayflow backend")
     case .local:
-      return modelOrTool ?? "Local"
+      return modelOrTool ?? String(localized: "Local")
     case .gemini:
-      return "Gemini 3.5 Flash"
+      return modelOrTool.flatMap(GeminiModel.init(rawValue:))?.displayName
+        ?? modelOrTool ?? String(localized: "Gemini")
     case .chatgpt:
-      return "GPT-5.4"
+      return modelOrTool == "gpt-5.6-sol"
+        ? String(localized: "GPT-5.6 Sol") : String(localized: "GPT-6 Astra")
     case .claude:
-      return "Claude Opus"
+      return String(localized: "Claude Opus")
     case .none:
-      return "No provider"
+      return String(localized: "No provider")
     }
   }
 }

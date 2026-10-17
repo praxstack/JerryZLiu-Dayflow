@@ -5,19 +5,34 @@ import UserNotifications
 
 extension DailyView {
   @ViewBuilder
-  func actionRow(scale: CGFloat) -> some View {
-    let actionButtons = HStack(spacing: 10 * scale) {
+  func actionButtons(scale: CGFloat) -> some View {
+    HStack(spacing: 10 * scale) {
       if hasPersistedStandupEntry {
         standupCopyButton(scale: scale)
       }
       standupRegenerateButton(scale: scale)
       dailyProviderButton(scale: scale)
     }
+  }
 
+  /// "Before" layout: buttons in their own trailing-aligned row below the
+  /// workflow grid instead of inline with the standup heading.
+  @ViewBuilder
+  func actionRow(scale: CGFloat) -> some View {
     HStack {
       Spacer(minLength: 0)
-      actionButtons
+      actionButtons(scale: scale)
     }
+  }
+  /// Peach "glass" pill shared by the Daily action buttons (Figma: Copy and
+  /// paste for standup).
+  var dailyControlPillBackground: some View {
+    Capsule(style: .continuous)
+      .fill(theme.controlFill)
+      .overlay(
+        InnerGlow(shape: Capsule(style: .continuous), color: theme.controlInnerGlow, radius: 3)
+      )
+      .overlay(Capsule(style: .continuous).strokeBorder(theme.controlBorder, lineWidth: 0.75))
   }
   func standupCopyButton(scale: CGFloat) -> some View {
     let transition = AnyTransition.opacity.combined(with: .scale(scale: 0.5))
@@ -54,31 +69,19 @@ extension DailyView {
         }
         .frame(minWidth: 136 * scale, alignment: .leading)
       }
-      .foregroundStyle(.white)
+      .foregroundStyle(theme.controlText)
       .padding(.horizontal, 12 * scale)
       .padding(.vertical, 10 * scale)
-      .background(
-        LinearGradient(
-          colors: [
-            Color(hex: "FF986F"),
-            Color(hex: "BDAAFF"),
-          ],
-          startPoint: .topLeading,
-          endPoint: .bottomTrailing
-        )
-      )
-      .clipShape(Capsule(style: .continuous))
-      .overlay(
-        Capsule(style: .continuous)
-          .stroke(Color(hex: "F2D7C3"), lineWidth: max(1.2, 1.5 * scale))
-      )
+      .background(dailyControlPillBackground)
       .contentShape(Capsule(style: .continuous))
     }
     .buttonStyle(DailyCopyPressButtonStyle())
     .animation(.easeInOut(duration: 0.22), value: standupCopyState)
     .pointingHandCursorOnHover(reassertOnPressEnd: true)
     .accessibilityLabel(
-      Text(standupCopyState == .copied ? "Copied standup update" : "Copy standup update"))
+      Text(
+        standupCopyState == .copied
+          ? String(localized: "Copied standup update") : String(localized: "Copy standup update")))
   }
   func standupRegenerateButton(scale: CGFloat) -> some View {
     let transition = AnyTransition.opacity.combined(with: .scale(scale: 0.5))
@@ -89,8 +92,8 @@ extension DailyView {
           if standupRegenerateState == .regenerating {
             ProgressView()
               .progressViewStyle(.circular)
-              .scaleEffect(0.6 * scale)
-              .tint(.white)
+              .scaleEffect(0.5 * scale)
+              .tint(theme.controlText)
           } else if standupRegenerateState == .regenerated {
             Image(systemName: "checkmark")
               .font(.system(size: 12 * scale, weight: .semibold))
@@ -118,26 +121,12 @@ extension DailyView {
             .lineLimit(1)
             .opacity(transientRegenerateButtonLabel == nil ? 0 : 1)
         }
-        .frame(minWidth: 108 * scale, alignment: .leading)
+        .frame(minWidth: stylePreviewAfter ? nil : 108 * scale, alignment: .leading)
       }
-      .foregroundStyle(.white)
+      .foregroundStyle(theme.controlText)
       .padding(.horizontal, 12 * scale)
       .padding(.vertical, 10 * scale)
-      .background(
-        LinearGradient(
-          colors: [
-            Color(hex: "FFB58A"),
-            Color(hex: "ED9BC0"),
-          ],
-          startPoint: .topLeading,
-          endPoint: .bottomTrailing
-        )
-      )
-      .clipShape(Capsule(style: .continuous))
-      .overlay(
-        Capsule(style: .continuous)
-          .stroke(Color(hex: "F2D7C3"), lineWidth: max(1.2, 1.5 * scale))
-      )
+      .background(dailyControlPillBackground)
       .contentShape(Capsule(style: .continuous))
     }
     .buttonStyle(DailyCopyPressButtonStyle())
@@ -171,9 +160,23 @@ extension DailyView {
     titles: DailyStandupSectionTitles
   ) -> some View {
     VStack(alignment: .leading, spacing: 8 * scale) {
-      Text(heading)
-        .font(.custom("InstrumentSerif-Regular", size: 24 * scale))
-        .foregroundStyle(Color(hex: "B46531"))
+      if stylePreviewAfter {
+        HStack(alignment: .center, spacing: 12 * scale) {
+          Text(heading)
+            .font(.custom("InstrumentSerif-Regular", size: 22 * scale))
+            .foregroundStyle(theme.textSecondary)
+            .lineLimit(1)
+            .minimumScaleFactor(0.75)
+
+          Spacer(minLength: 0)
+
+          actionButtons(scale: scale)
+        }
+      } else {
+        Text(heading)
+          .font(.custom("InstrumentSerif-Regular", size: 24 * scale))
+          .foregroundStyle(theme.textSecondary)
+      }
 
       if useSingleColumn {
         VStack(alignment: .leading, spacing: 12 * scale) {
@@ -530,7 +533,7 @@ extension DailyView {
     var lines: [String] = []
     lines.append(titles.highlights)
     if yesterdayItems.isEmpty {
-      lines.append("- None right now")
+      lines.append(String(localized: "- None right now"))
     } else {
       yesterdayItems.forEach { lines.append("- \($0)") }
     }
@@ -538,7 +541,7 @@ extension DailyView {
 
     lines.append(titles.tasks)
     if todayItems.isEmpty {
-      lines.append("- None right now")
+      lines.append(String(localized: "- None right now"))
     } else {
       todayItems.forEach { lines.append("- \($0)") }
     }
@@ -546,7 +549,7 @@ extension DailyView {
 
     lines.append(titles.blockers)
     if blockersItems.isEmpty {
-      lines.append("- None right now")
+      lines.append(String(localized: "- None right now"))
     } else {
       blockersItems.forEach { lines.append("- \($0)") }
     }
@@ -684,17 +687,18 @@ extension DailyView {
   var regenerateButtonLabel: String {
     switch standupRegenerateState {
     case .regenerating:
-      return "Regenerating" + String(repeating: ".", count: standupRegeneratingDotsPhase)
+      return String(localized: "Regenerating")
+        + String(repeating: ".", count: standupRegeneratingDotsPhase)
     case .idle, .regenerated, .noData:
-      return "Regenerate"
+      return String(localized: "Regenerate")
     }
   }
   var transientRegenerateButtonLabel: String? {
     switch standupRegenerateState {
     case .regenerated:
-      return "Regenerated"
+      return String(localized: "Regenerated")
     case .noData:
-      return "No data"
+      return String(localized: "No data")
     case .idle, .regenerating:
       return nil
     }
@@ -718,27 +722,21 @@ extension DailyView {
     return DailyStandupSectionTitles(
       highlights: standupHighlightsTitle(for: sourceDay),
       tasks: standupTasksTitle(for: targetDay),
-      blockers: "Blockers"
+      blockers: String(localized: "Blockers")
     )
   }
   func standupSectionHeading(for date: Date) -> String {
-    "Standup for \(dailyDateTitle(for: date))"
+    String(localized: "Standup for \(dailyDateTitle(for: date))")
   }
   func standupHighlightsTitle(for sourceDay: DailyStandupDayInfo?) -> String {
-    guard let sourceDay else { return "Recent highlights" }
+    guard let sourceDay else { return String(localized: "Recent highlights") }
 
     let label = standupDayLabelText(for: sourceDay.startOfDay)
-    if label == "Today" || label == "Yesterday" || label.hasPrefix("Last ") {
-      return "\(label)'s highlights"
-    }
-    return "Highlights from \(label)"
+    return String(localized: "Highlights from \(label)")
   }
   func standupTasksTitle(for targetDay: DailyStandupDayInfo) -> String {
     let label = standupDayLabelText(for: targetDay.startOfDay)
-    if label == "Today" || label == "Yesterday" {
-      return "\(label)'s tasks"
-    }
-    return "Tasks for \(label)"
+    return String(localized: "Tasks for \(label)")
   }
   func standupDayLabelText(for date: Date) -> String {
     let calendar = Calendar.current
@@ -746,7 +744,7 @@ extension DailyView {
     let timelineToday = timelineDisplayDate(from: Date())
 
     if calendar.isDate(displayDate, inSameDayAs: timelineToday) {
-      return "Today"
+      return String(localized: "Today")
     }
 
     guard let timelineYesterday = calendar.date(byAdding: .day, value: -1, to: timelineToday)
@@ -755,12 +753,12 @@ extension DailyView {
     }
 
     if calendar.isDate(displayDate, inSameDayAs: timelineYesterday) {
-      return "Yesterday"
+      return String(localized: "Yesterday")
     }
 
     let daysAgo = calendar.dateComponents([.day], from: displayDate, to: timelineToday).day ?? 99
     if (2...6).contains(daysAgo) {
-      return "Last \(dailyStandupWeekdayFormatter.string(from: displayDate))"
+      return dailyStandupWeekdayFormatter.string(from: displayDate)
     }
 
     return dailyOtherDayDisplayFormatter.string(from: displayDate)

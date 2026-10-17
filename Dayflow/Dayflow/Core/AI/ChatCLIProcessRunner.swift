@@ -16,6 +16,8 @@ struct ClaudeCLIExecutionProfile: Sendable {
     case optimizedTranscription
     case optimizedTranscriptionCorrection
     case optimizedCardGeneration
+    case oneStepTimeline
+    case flowAgent
   }
 
   fileprivate let kind: Kind
@@ -42,6 +44,44 @@ struct ClaudeCLIExecutionProfile: Sendable {
     allowedReadPath: nil
   )
 
+  /// One-step timeline generation: the model reads each screenshot of the batch from a
+  /// temporary folder and writes the cards directly, thinking at medium effort.
+  static let oneStepTimeline = ClaudeCLIExecutionProfile(
+    kind: .oneStepTimeline,
+    allowedReadPath: nil
+  )
+
+  private static let oneStepTimelineSystemPrompt =
+    "You turn ordered screenshots of a computer screen into timeline cards. Each screenshot is "
+    + "a local file listed in the user message. Use Read exactly once on every listed file "
+    + "before answering and treat the pixels as authoritative. Do not inspect any other files "
+    + "or use any other tools. Return only the JSON requested by the user."
+
+  /// The Flow focus companion: one resumable conversation per session that
+  /// reads a screenshot each turn and answers with a JSON verdict.
+  static let flowAgent = ClaudeCLIExecutionProfile(
+    kind: .flowAgent,
+    allowedReadPath: nil
+  )
+
+  private static let flowAgentSystemPrompt =
+    "You are the focus companion inside Dayflow. When a message lists a local image "
+    + "file, use Read exactly once on it to look at the user's screen, then answer with "
+    + "only the JSON the user asked for. The one other file you may touch is timeline.json "
+    + "in your working directory, and only when a message asks for a timeline update. "
+    + "Do not inspect any other files or use any other tools."
+
+  /// The Flow agent's working directory holds only the current screenshot
+  /// and timeline.json; it may read and edit inside it and nowhere else.
+  func allowingFlowWorkspace(at directory: String) -> ClaudeCLIExecutionProfile {
+    ClaudeCLIExecutionProfile(kind: .flowAgent, allowedReadPath: directory)
+  }
+
+  /// Lets the one-step profile read every frame inside its temporary folder and nothing else.
+  func allowingReadDirectory(at directory: String) -> ClaudeCLIExecutionProfile {
+    ClaudeCLIExecutionProfile(kind: kind, allowedReadPath: directory)
+  }
+
   func allowingRead(at path: String) -> ClaudeCLIExecutionProfile {
     ClaudeCLIExecutionProfile(
       kind: kind,
@@ -56,7 +96,24 @@ struct ClaudeCLIExecutionProfile: Sendable {
     let persistenceArguments = sessionMode == .ephemeral ? ["--no-session-persistence"] : []
     switch kind {
     case .optimizedTranscription, .optimizedTranscriptionCorrection:
-      return transcriptionCommandArguments(persistenceArguments: persistenceArguments)
+      return transcriptionCommandArguments(
+        systemPrompt: Self.optimizedTranscriptionSystemPrompt,
+        name: "dayflow-transcription",
+        persistenceArguments: persistenceArguments)
+
+    case .oneStepTimeline:
+      return transcriptionCommandArguments(
+        systemPrompt: Self.oneStepTimelineSystemPrompt,
+        name: "dayflow-timeline",
+        settings: #"{"alwaysThinkingEnabled":true,"effortLevel":"medium"}"#,
+        persistenceArguments: persistenceArguments)
+
+    case .flowAgent:
+      return transcriptionCommandArguments(
+        systemPrompt: Self.flowAgentSystemPrompt,
+        name: "dayflow-flow",
+        tools: "Read,Edit,Write",
+        persistenceArguments: persistenceArguments)
 
     case .optimizedCardGeneration:
       return [
@@ -72,24 +129,38 @@ struct ClaudeCLIExecutionProfile: Sendable {
     }
   }
 
-  private func transcriptionCommandArguments(persistenceArguments: [String]) -> [String] {
+  private func transcriptionCommandArguments(
+    systemPrompt: String, name: String, tools: String = "Read",
+    settings: String = #"{"alwaysThinkingEnabled":false,"effortLevel":"low"}"#,
+    persistenceArguments: [String]
+  ) -> [String] {
     var arguments = [
       "--disable-slash-commands",
       "--prompt-suggestions", "false",
       "--settings",
-      LoginShellRunner.shellEscape(
-        #"{"alwaysThinkingEnabled":false,"effortLevel":"low"}"#
-      ),
+      LoginShellRunner.shellEscape(settings),
       "--system-prompt",
-      LoginShellRunner.shellEscape(Self.optimizedTranscriptionSystemPrompt),
-      "--tools", "Read",
-      "--name", "dayflow-transcription",
+      LoginShellRunner.shellEscape(systemPrompt),
+      "--tools", tools,
+      "--name", name,
     ]
     arguments.append(contentsOf: persistenceArguments)
-    if let allowedReadPath {
+    if let allowedReadPath, kind == .flowAgent {
       arguments.append(contentsOf: [
         "--allowedTools",
-        LoginShellRunner.shellEscape("Read(\(allowedReadPath))"),
+        LoginShellRunner.shellEscape("Read(/\(allowedReadPath)/**)"),
+        LoginShellRunner.shellEscape("Edit(/\(allowedReadPath)/**)"),
+      ])
+    } else if let allowedReadPath, kind == .oneStepTimeline {
+      arguments.append(contentsOf: [
+        "--allowedTools",
+        LoginShellRunner.shellEscape("Read(/\(allowedReadPath)/**)"),
+      ])
+    } else if let allowedReadPath {
+      // Claude permission rules use // for absolute paths; / is project-relative.
+      arguments.append(contentsOf: [
+        "--allowedTools",
+        LoginShellRunner.shellEscape("Read(/\(allowedReadPath))"),
       ])
     }
     return arguments
@@ -97,15 +168,15 @@ struct ClaudeCLIExecutionProfile: Sendable {
 
   fileprivate var environmentOverrides: [String: String] {
     switch kind {
-    case .optimizedCardGeneration:
+    case .optimizedCardGeneration, .oneStepTimeline:
       return [:]
-    case .optimizedTranscription, .optimizedTranscriptionCorrection:
+    case .optimizedTranscription, .optimizedTranscriptionCorrection, .flowAgent:
       return ["MAX_THINKING_TOKENS": "0"]
     }
   }
 
   fileprivate var environmentKeysToRemove: Set<String> {
-    kind == .optimizedCardGeneration ? ["MAX_THINKING_TOKENS"] : []
+    kind == .optimizedCardGeneration || kind == .oneStepTimeline ? ["MAX_THINKING_TOKENS"] : []
   }
 }
 
@@ -221,6 +292,28 @@ struct ChatCLIProcessRunner {
 
   func shouldDisableConfiguredCodexMCPServers(processEnvironment: [String: String]) -> Bool {
     processEnvironment["CODEX_HOME"] == nil
+  }
+
+  /// Whether `codex exec [resume] --help` lists `--ignore-user-config`.
+  /// Cached per executable + subcommand: this is asked on every tick.
+  private nonisolated(unsafe) static var ignoreUserConfigSupport: [String: Bool] = [:]
+  private static let ignoreUserConfigSupportLock = NSLock()
+
+  static func codexSupportsIgnoringUserConfig(executableCommand: String, resuming: Bool) -> Bool {
+    let key = "\(executableCommand)\(resuming ? " resume" : "")"
+    ignoreUserConfigSupportLock.lock()
+    if let cached = ignoreUserConfigSupport[key] {
+      ignoreUserConfigSupportLock.unlock()
+      return cached
+    }
+    ignoreUserConfigSupportLock.unlock()
+    let helpCommand = "\(executableCommand) exec\(resuming ? " resume" : "") --help"
+    let supported = LoginShellRunner.run(helpCommand, timeout: 10)
+      .stdout.contains("--ignore-user-config")
+    ignoreUserConfigSupportLock.lock()
+    ignoreUserConfigSupport[key] = supported
+    ignoreUserConfigSupportLock.unlock()
+    return supported
   }
 
   func resolvedCodexExecutable(for tool: ChatCLITool) throws
@@ -474,7 +567,13 @@ struct ChatCLIProcessRunner {
       for override in codexConfigOverrides {
         cmdParts.append(contentsOf: ["-c", LoginShellRunner.shellEscape(override)])
       }
-      if shouldDisableConfiguredCodexMCPServers(processEnvironment: processEnvironment) {
+      if Self.codexSupportsIgnoringUserConfig(
+        executableCommand: executableCommand, resuming: sessionId != nil)
+      {
+        // Keep auth and resumable sessions in the normal home without loading
+        // unrelated MCP configuration or moving sessions into a temporary home.
+        cmdParts.append("--ignore-user-config")
+      } else if shouldDisableConfiguredCodexMCPServers(processEnvironment: processEnvironment) {
         let mcpServers = LoginShellRunner.getCodexMCPServerNames(
           executableURL: codexExecutable!.executableURL
         )
@@ -534,6 +633,7 @@ struct ChatCLIProcessRunner {
     var stderrBuffer = Data()
     var sawTextDelta = false
     var didYieldComplete = false
+    var didYieldError = false
 
     func cleanupStreamingResources() {
       stdoutHandle.readabilityHandler = nil
@@ -555,6 +655,7 @@ struct ChatCLIProcessRunner {
         guard !line.isEmpty else { continue }
 
         if let event = parseJSONLLine(tool: tool, line: line) {
+          if case .error = event { didYieldError = true }
           var shouldYield = true
           if case .textDelta(let text) = event {
             sawTextDelta = true
@@ -658,6 +759,7 @@ struct ChatCLIProcessRunner {
         let trimmed = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
         let line = stripANSIEscapes(trimmed)
         if !line.isEmpty, let event = parseJSONLLine(tool: tool, line: line) {
+          if case .error = event { didYieldError = true }
           var shouldYield = true
           if case .textDelta(let text) = event {
             sawTextDelta = true
@@ -684,7 +786,8 @@ struct ChatCLIProcessRunner {
       (
         accumulatedText,
         didYieldComplete,
-        String(data: stderrBuffer, encoding: .utf8) ?? ""
+        String(data: stderrBuffer, encoding: .utf8) ?? "",
+        didYieldError
       )
     }
 
@@ -750,7 +853,7 @@ struct ChatCLIProcessRunner {
       continuation.yield(event)
     }
 
-    if process.terminationStatus != 0 {
+    if process.terminationStatus != 0, !finalState.3 {
       let stderr = finalState.2
       if stderr.contains("command not found") {
         continuation.yield(
@@ -787,6 +890,18 @@ struct ChatCLIProcessRunner {
 
     if event.type == "thread.started", let threadId = event.thread_id {
       return .sessionStarted(id: threadId)
+    }
+
+    if event.type == "error" || event.type == "turn.failed" {
+      let message = event.error?.message ?? event.message ?? "Codex could not complete the request."
+      // API failures can themselves be JSON encoded inside the JSONL message.
+      if let nestedData = message.data(using: .utf8),
+        let nested = try? JSONDecoder().decode(CodexJSONLEvent.self, from: nestedData),
+        let detail = nested.error?.message ?? nested.message
+      {
+        return .error(detail)
+      }
+      return .error(message)
     }
 
     guard let item = event.item else { return nil }
@@ -1229,7 +1344,20 @@ struct ChatCLIProcessRunner {
       for override in codexConfigOverrides {
         cmdParts.append(contentsOf: ["-c", LoginShellRunner.shellEscape(override)])
       }
-      if shouldDisableConfiguredCodexMCPServers(processEnvironment: effectiveProcessEnvironment) {
+      // Same as the streaming path: skip the user's config.toml entirely
+      // when the CLI can. Disabling MCP servers one by one breaks on
+      // plugin-registered servers (e.g. the computer-use app's cua_repl) that
+      // have no config.toml entry — the override creates a partial table,
+      // config loading fails with "invalid transport", and the fallback
+      // below moves the run into a temporary CODEX_HOME where `exec resume`
+      // finds no rollout.
+      if Self.codexSupportsIgnoringUserConfig(
+        executableCommand: executableCommand, resuming: codexResumeSessionId != nil)
+      {
+        cmdParts.append("--ignore-user-config")
+      } else if shouldDisableConfiguredCodexMCPServers(
+        processEnvironment: effectiveProcessEnvironment)
+      {
         let mcpServers = LoginShellRunner.getCodexMCPServerNames(
           executableURL: codexExecutable!.executableURL
         )

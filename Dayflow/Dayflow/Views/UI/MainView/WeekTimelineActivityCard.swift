@@ -16,6 +16,8 @@ struct WeekTimelineCardPalette {
 }
 
 struct WeekTimelineActivityCard: View {
+  @Environment(\.dayflowTheme) private var theme
+
   let cardId: String
   let title: String
   let hoverTimeLabel: String
@@ -52,8 +54,10 @@ struct WeekTimelineActivityCard: View {
   }
 
   private var displayTitle: String {
-    guard isFailedCard, failureCount > 1 else { return title }
-    return "\(title) · \(failureCount) intervals"
+    guard isFailedCard else { return title }
+    let failedTitle = String(localized: "Processing failed")
+    guard failureCount > 1 else { return failedTitle }
+    return String(localized: "\(failedTitle) · \(failureCount) intervals")
   }
 
   // Title font size is a single constant across every card in the grid — no
@@ -131,7 +135,8 @@ struct WeekTimelineActivityCard: View {
           secondaryRaw: faviconSecondaryRaw,
           primaryHost: faviconPrimaryHost,
           secondaryHost: faviconSecondaryHost,
-          size: 12
+          size: 12,
+          backgroundColor: isFailedCard ? theme.cardFailedFill : palette.fill
         )
       }
 
@@ -160,7 +165,8 @@ struct WeekTimelineActivityCard: View {
     // stroke, and no left accent bar. Kept as three inline branches rather
     // than a dedicated Modifier so it's obvious at read-time what's
     // special-cased.
-    .background(isFailedCard ? Color(hex: "FFECE4") : palette.fill)
+    .background(isFailedCard ? theme.cardFailedFill : palette.fill)
+    .background(theme.panelSolid)
     .clipShape(RoundedRectangle(cornerRadius: 2, style: .continuous))
     .overlay(
       RoundedRectangle(cornerRadius: 2, style: .continuous)
@@ -188,7 +194,7 @@ struct WeekTimelineActivityCard: View {
     }
     .overlay(
       RoundedRectangle(cornerRadius: 2, style: .continuous)
-        .stroke(Color.black.opacity(isHovered ? 0.10 : 0), lineWidth: 1)
+        .stroke(theme.textPrimary.opacity(isHovered ? 0.10 : 0), lineWidth: 1)
     )
     // Shadow deepens when hovered — the "card lifts toward you" cue. Opacity
     // halved (0.12→0.06, 0.10→0.05) so the lift reads as a subtle cue rather
@@ -260,7 +266,7 @@ struct WeekTimelineActivityCard: View {
 
       Text(statusLine)
         .font(.custom("Figtree", size: 9))
-        .foregroundColor(Color(hex: "7A6254"))
+        .foregroundColor(theme.cardTime)
         .lineLimit(renderingExpanded ? nil : 1)
         .truncationMode(.tail)
     }

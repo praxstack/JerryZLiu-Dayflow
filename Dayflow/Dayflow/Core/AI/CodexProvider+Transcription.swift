@@ -6,13 +6,7 @@ extension CodexProvider {
   static func transcriptionModelConfiguration() -> (
     model: String, reasoningEffort: String?
   ) {
-    return (model: "gpt-5.6-luna", reasoningEffort: "low")
-  }
-
-  static func legacyTranscriptionModelConfiguration() -> (
-    model: String, reasoningEffort: String?
-  ) {
-    return (model: "gpt-5.4-mini", reasoningEffort: "low")
+    return (model: "gpt-6-luna", reasoningEffort: "low")
   }
 
   func transcribeScreenshots(
@@ -38,13 +32,21 @@ extension CodexProvider {
     let durationSeconds = TimeInterval(lastTs - firstTs)
     let durationString = formatSeconds(durationSeconds)
 
-    let imagePaths: [String] = sampledScreenshots.compactMap { screenshot in
-      guard FileManager.default.fileExists(atPath: screenshot.filePath) else {
-        print("[ChatCLI] ⚠️ Screenshot file not found: \(screenshot.filePath)")
+    // The CLI needs files on disk, so decode each sampled frame to a temp JPEG.
+    let imageDirectory = FileManager.default.temporaryDirectory
+      .appendingPathComponent("DayflowCodexFrames-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: imageDirectory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: imageDirectory) }
+
+    let imagePaths: [String] = sampledScreenshots.enumerated().compactMap { index, screenshot in
+      let url = imageDirectory.appendingPathComponent(String(format: "frame_%02d.jpg", index))
+      do {
+        try screenshot.writeJPEG(to: url, maxHeight: 720, quality: 0.85)
+        return url.path
+      } catch {
+        print("[ChatCLI] ⚠️ Could not decode screenshot \(screenshot.id): \(error)")
         return nil
       }
-
-      return screenshot.filePath
     }
 
     guard !imagePaths.isEmpty else {
@@ -56,9 +58,8 @@ extension CodexProvider {
     }
 
     let modelConfiguration = Self.transcriptionModelConfiguration()
-    let legacyModelConfiguration = Self.legacyTranscriptionModelConfiguration()
     var model = modelConfiguration.model
-    var effort = modelConfiguration.reasoningEffort
+    let effort = modelConfiguration.reasoningEffort
 
     let basePrompt = buildScreenshotTranscriptionPrompt(
       numFrames: imagePaths.count,
@@ -70,43 +71,31 @@ extension CodexProvider {
     var lastError: Error?
     var lastRun: ChatCLIRunResult?
 
-    func applyLegacyModelFallback(after error: Error) -> Bool {
-      guard
-        Self.shouldUseLegacyModel(
-          after: error,
-          currentModel: model,
-          fallbackModel: legacyModelConfiguration.model
-        )
-      else { return false }
-
-      captureLegacyModelFallback(
-        operation: "transcribe_screenshots",
-        fromModel: model,
-        toModel: legacyModelConfiguration.model,
-        batchId: batchId
-      )
-      model = legacyModelConfiguration.model
-      effort = legacyModelConfiguration.reasoningEffort
-      actualPrompt = basePrompt
-      print("[ChatCLI] Codex is outdated; retrying transcription with \(model)")
-      return true
-    }
-
     let maxTranscribeAttempts = 3
     for attempt in 1...maxTranscribeAttempts {
       do {
         let run = try runAndScrub(
           prompt: actualPrompt, imagePaths: imagePaths, model: model, reasoningEffort: effort)
         lastRun = run
+        if run.exitCode != 0 || run.stdout.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+          let reportedError = run.rawStdout.split(separator: "\n").compactMap { line -> String? in
+            if case .error(let message) = runner.parseCodexEvent(Data(line.utf8)) { return message }
+            return nil
+          }.last
+          if run.exitCode != 0 || reportedError != nil {
+            throw NSError(
+              domain: "ChatCLI", code: Int(run.exitCode),
+              userInfo: [
+                NSLocalizedDescriptionKey: reportedError ?? (run.stderr + "\n" + run.stdout)
+              ])
+          }
+        }
 
         let segments: [SegmentMergeResponse.Segment]
         do {
           segments = try parseSegments(from: run.stdout, stderr: run.stderr)
         } catch {
           lastError = error
-          if attempt < maxTranscribeAttempts, applyLegacyModelFallback(after: error) {
-            continue
-          }
           if attempt < maxTranscribeAttempts {
             print(
               "[ChatCLI] Screenshot transcribe attempt \(attempt) failed: \(error.localizedDescription) — retrying"
@@ -202,10 +191,15 @@ extension CodexProvider {
           }
         }
       } catch {
-        lastError = error
-        if attempt < maxTranscribeAttempts, applyLegacyModelFallback(after: error) {
-          continue
+        if error is CancellationError { throw error }
+        if attempt < 3,
+          let fallback = Self.availabilityFallback(
+            for: model, error: error, stderr: lastRun?.stderr)
+        {
+          Self.recordModelFallback(from: model, to: fallback, operation: "transcribe_screenshots")
+          model = fallback
         }
+        lastError = error
         if attempt < maxTranscribeAttempts {
           print(
             "[ChatCLI] Screenshot transcribe attempt \(attempt) failed: \(error.localizedDescription) — retrying"

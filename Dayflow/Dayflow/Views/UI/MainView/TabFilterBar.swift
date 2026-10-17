@@ -1,14 +1,25 @@
 import SwiftUI
 
+/// Normalizes a category name so chips and timeline cards match regardless of
+/// case or stray whitespace.
+func categoryFilterKey(_ name: String) -> String {
+  name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+}
+
 struct TabFilterBar: View {
   let categories: [TimelineCategory]
   let idleCategory: TimelineCategory?
+  @Binding var mutedCategoryKeys: Set<String>
   let onManageCategories: () -> Void
+  let onMoveCategory: (_ id: UUID, _ targetID: UUID) -> Void
 
+  @Environment(\.dayflowTheme) private var theme
   @State private var chipRowWidth: CGFloat = 0
+  @State private var draggedCategoryID: UUID?
 
   private let editButtonSize: CGFloat = 24
   private let chipButtonSpacing: CGFloat = 8
+  private let chipRowHeight: CGFloat = 26
 
   var body: some View {
     GeometryReader { geometry in
@@ -46,49 +57,59 @@ struct TabFilterBar: View {
   }
 
   struct CategoryChip: View {
+    @Environment(\.dayflowTheme) private var theme
+
     let category: TimelineCategory
     let isIdle: Bool
+    let isMuted: Bool
+    let onTap: () -> Void
 
     var body: some View {
+      Button(action: onTap) {
+        chipLabel
+      }
+      .buttonStyle(.plain)
+      .pointingHandCursor()
+      .opacity(isMuted ? 0.4 : 1)
+      .animation(.easeOut(duration: 0.15), value: isMuted)
+    }
+
+    private var chipLabel: some View {
       HStack(spacing: 10) {
         Circle()
           .fill(Color(hex: category.colorHex))
           .frame(width: 10, height: 10)
 
         Text(category.name)
-          .font(
-            Font.custom("Figtree", size: 13)
-              .weight(.medium)
-          )
-          .foregroundColor(Color(red: 0.2, green: 0.2, blue: 0.2))
+          .font(Font.custom("Figtree", size: 13).weight(.medium))
+          .foregroundColor(theme.chipText)
           .lineLimit(1)
           .fixedSize()
       }
       .padding(.horizontal, 8)
       .padding(.vertical, 5)
       .frame(height: 26)
-      .background(.white.opacity(0.76))
-      .cornerRadius(6)
+      .background(theme.chipFill)
+      .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
       .overlay(
-        RoundedRectangle(cornerRadius: 6)
-          .inset(by: 0.25)
-          .stroke(Color(red: 0.88, green: 0.88, blue: 0.88), lineWidth: 0.5)
+        RoundedRectangle(cornerRadius: 6, style: .continuous)
+          .strokeBorder(theme.chipBorder, lineWidth: 0.5)
       )
     }
   }
 
   private func visibleChipRow(width: CGFloat) -> some View {
     ScrollView(.horizontal, showsIndicators: false) {
-      chipRowContent
+      chipRowContent(isReorderable: true)
         .fixedSize(horizontal: true, vertical: false)
-        .frame(height: 26)
+        .frame(height: chipRowHeight)
     }
-    .frame(width: max(0, width), height: 26, alignment: .leading)
+    .frame(width: max(0, width), height: chipRowHeight, alignment: .leading)
     .clipped()
   }
 
   private var measuredChipRow: some View {
-    chipRowContent
+    chipRowContent(isReorderable: false)
       .fixedSize(horizontal: true, vertical: false)
       .background(
         GeometryReader { proxy in
@@ -97,17 +118,58 @@ struct TabFilterBar: View {
       )
   }
 
-  private var chipRowContent: some View {
+  /// The hidden measuring copy passes `isReorderable: false` so only the
+  /// visible row registers drag sources and drop targets.
+  private func chipRowContent(isReorderable: Bool) -> some View {
     HStack(spacing: 5) {
       ForEach(categories) { category in
-        CategoryChip(category: category, isIdle: false)
+        if isReorderable {
+          reorderableChip(for: category)
+        } else {
+          chip(for: category, isIdle: false)
+        }
       }
 
       if let idleCategory {
-        CategoryChip(category: idleCategory, isIdle: true)
+        chip(for: idleCategory, isIdle: true)
       }
     }
     .padding(.leading, 2)
+  }
+
+  private func chip(for category: TimelineCategory, isIdle: Bool) -> some View {
+    let key = categoryFilterKey(category.name)
+    return CategoryChip(
+      category: category,
+      isIdle: isIdle,
+      isMuted: mutedCategoryKeys.contains(key),
+      onTap: { toggleMuted(key) }
+    )
+  }
+
+  private func reorderableChip(for category: TimelineCategory) -> some View {
+    let categoryID = category.id
+    return chip(for: category, isIdle: false)
+      .onDrag {
+        draggedCategoryID = categoryID
+        return NSItemProvider(object: categoryID.uuidString as NSString)
+      }
+      .onDrop(
+        of: ["public.text"],
+        delegate: CategoryChipDropDelegate(
+          targetCategoryID: categoryID,
+          draggedCategoryID: $draggedCategoryID,
+          onMoveCategory: onMoveCategory
+        )
+      )
+  }
+
+  private func toggleMuted(_ key: String) {
+    if mutedCategoryKeys.contains(key) {
+      mutedCategoryKeys.remove(key)
+    } else {
+      mutedCategoryKeys.insert(key)
+    }
   }
 
   private var editButton: some View {
@@ -119,12 +181,34 @@ struct TabFilterBar: View {
 
   private var overflowGradient: some View {
     LinearGradient(
-      gradient: Gradient(colors: [Color.clear, Color(hex: "FFF8F1")]),
+      gradient: Gradient(colors: [Color.clear, theme.panelSolid]),
       startPoint: .leading,
       endPoint: .trailing
     )
     .frame(width: 40)
     .allowsHitTesting(false)
+  }
+
+  private struct CategoryChipDropDelegate: DropDelegate {
+    let targetCategoryID: UUID
+    @Binding var draggedCategoryID: UUID?
+    let onMoveCategory: (_ id: UUID, _ targetID: UUID) -> Void
+
+    func dropEntered(info: DropInfo) {
+      guard let draggedID = draggedCategoryID, draggedID != targetCategoryID else { return }
+      withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
+        onMoveCategory(draggedID, targetCategoryID)
+      }
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+      DropProposal(operation: .move)
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+      draggedCategoryID = nil
+      return true
+    }
   }
 
   private struct ChipRowWidthPreferenceKey: PreferenceKey {

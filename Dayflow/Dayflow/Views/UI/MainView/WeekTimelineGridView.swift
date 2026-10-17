@@ -74,6 +74,8 @@ struct WeekTimelineGridView: View {
   var weeklyHoursFrame: CGRect = .zero
   var weeklyHoursIntersectsCard: Binding<Bool> = .constant(false)
   var hideCardsForModeSwitch = false
+  // Categories turned off in the chip row; their cards render dimmed.
+  var mutedCategoryKeys: Set<String> = []
 
   // Opt-in fake data for #Preview; nil in production so loadActivities() runs normally.
   var previewPositionedActivities: [WeekPositionedActivity]? = nil
@@ -102,6 +104,7 @@ struct WeekTimelineGridView: View {
   @AppStorage("showTimelineAppIcons") private var showTimelineAppIcons = true
   @EnvironmentObject private var appState: AppState
   @EnvironmentObject private var categoryStore: CategoryStore
+  @Environment(\.dayflowTheme) private var theme
   @EnvironmentObject private var retryCoordinator: RetryCoordinator
   @ObservedObject private var pauseManager = PauseManager.shared
 
@@ -255,7 +258,7 @@ struct WeekTimelineGridView: View {
         HStack(spacing: WeekTimelineConfig.weekdayInlineSpacing) {
           Text(day.weekdayLabel)
             .font(.custom("Figtree", size: 12).weight(.medium))
-            .foregroundColor(Color(hex: "333333"))
+            .foregroundColor(theme.textPrimary)
 
           dayNumberBadge(for: day)
         }
@@ -275,12 +278,12 @@ struct WeekTimelineGridView: View {
         .frame(width: 18, height: 18)
         .background(
           Circle()
-            .fill(Color(hex: "F96E00"))
+            .fill(theme.accent)
         )
     } else {
       Text(day.dayNumber)
         .font(.custom("Figtree", size: 12).weight(.medium))
-        .foregroundColor(Color(hex: "333333"))
+        .foregroundColor(theme.textPrimary)
     }
   }
 
@@ -330,7 +333,7 @@ struct WeekTimelineGridView: View {
         ForEach(0..<(WeekTimelineConfig.endHour - WeekTimelineConfig.startHour), id: \.self) { _ in
           VStack(spacing: 0) {
             Rectangle()
-              .fill(Color.black.opacity(0.1))
+              .fill(theme.hourLine)
               .frame(height: 1)
             Spacer(minLength: 0)
           }
@@ -342,7 +345,7 @@ struct WeekTimelineGridView: View {
       HStack(spacing: 0) {
         ForEach(0..<8, id: \.self) { index in
           Rectangle()
-            .fill(Color.black.opacity(0.1))
+            .fill(theme.hourLine)
             .frame(width: index == 0 ? 0 : 1)
 
           if index < 7 {
@@ -362,7 +365,7 @@ struct WeekTimelineGridView: View {
         let hourIndex = hour - WeekTimelineConfig.startHour
         Text(formatHour(hour))
           .font(.custom("Figtree", size: 9))
-          .foregroundColor(Color(hex: "594838"))
+          .foregroundColor(theme.hourLabel)
           .padding(.trailing, 6)
           .padding(.top, 2)
           .frame(width: WeekTimelineConfig.timeColumnWidth, alignment: .trailing)
@@ -420,6 +423,8 @@ struct WeekTimelineGridView: View {
           }
         }
         .frame(width: cardWidth)
+        .opacity(mutedCategoryKeys.contains(categoryFilterKey(item.categoryName)) ? 0.25 : 1)
+        .animation(.easeOut(duration: 0.15), value: mutedCategoryKeys)
         .position(x: cardXPosition, y: item.yPosition + cardEffectiveHeight / 2)
         .animation(isHov ? hoverAnimation : collapseAnimation, value: hoveredCardID)
       }
@@ -871,16 +876,13 @@ struct WeekTimelineGridView: View {
     }
     let fallback = categoryStore.categories.first ?? CategoryPersistence.defaultCategories.first!
     let category = matched ?? fallback
-    let accentNSColor = NSColor(hex: category.colorHex) ?? .systemBlue
-    let fillColor =
-      accentNSColor.blended(with: 0.88, of: .white) ?? accentNSColor.withAlphaComponent(0.12)
-    let borderColor = accentNSColor.blended(with: 0.62, of: .white) ?? accentNSColor
+    let accent = Color(nsColor: NSColor(hex: category.colorHex) ?? .systemBlue)
 
     return WeekTimelineCardPalette(
-      accent: Color(nsColor: accentNSColor),
-      fill: Color(nsColor: fillColor),
-      border: Color(nsColor: borderColor),
-      title: Color(hex: "333333")
+      accent: accent,
+      fill: accent.opacity(theme.weekCardFillOpacity),
+      border: accent,
+      title: theme.textPrimary
     )
   }
 }

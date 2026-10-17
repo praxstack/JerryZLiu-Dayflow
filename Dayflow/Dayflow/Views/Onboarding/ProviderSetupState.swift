@@ -34,7 +34,7 @@ class ProviderSetupState: ObservableObject {
 
   var lastSavedGeminiModel: GeminiModel
   var hasStartedCLICheck = false
-  private(set) var configuredProviderID: LLMProviderID?
+  @Published private(set) var configuredProviderID: LLMProviderID?
 
   init() {
     let defaults = UserDefaults.standard
@@ -72,7 +72,9 @@ class ProviderSetupState: ObservableObject {
   var currentStep: SetupStep {
     guard currentStepIndex < steps.count else {
       return SetupStep(
-        id: "fallback", title: "Setup", contentType: .information("Complete", "Setup is complete"))
+        id: "fallback", title: String(localized: "Setup"),
+        contentType: .information(
+          String(localized: "Complete"), String(localized: "Setup is complete")))
     }
     return steps[currentStepIndex]
   }
@@ -106,61 +108,37 @@ class ProviderSetupState: ObservableObject {
       steps = [
         SetupStep(
           id: "intro",
-          title: "Before you begin",
+          title: String(localized: "Before you begin"),
           contentType: .information(
-            "For experienced users",
-            "This path is recommended only if you're comfortable running LLMs locally and debugging technical issues. If terms like vLLM or API endpoint don't ring a bell, we recommend going back and picking ChatGPT, Claude, or Gemini. It's non-technical and takes about 30 seconds.\n\nFor local mode, Dayflow recommends Qwen3-VL 4B as the core vision-language model (Qwen2.5-VL 3B remains available if you need a smaller download)."
+            String(localized: "For experienced users"),
+            String(
+              localized:
+                "This path is recommended only if you're comfortable running LLMs locally and debugging technical issues. If terms like vLLM or API endpoint don't ring a bell, we recommend going back and picking ChatGPT, Claude, or Gemini. It's non-technical and takes about 30 seconds.\n\nFor local mode, Dayflow recommends Qwen3-VL 4B as the core vision-language model (Qwen2.5-VL 3B remains available if you need a smaller download)."
+            )
           )
         ),
-        SetupStep(id: "choose", title: "Choose engine", contentType: .localChoice),
-        SetupStep(id: "model", title: "Install model", contentType: .localModelInstall),
         SetupStep(
-          id: "test", title: "Test connection",
+          id: "choose", title: String(localized: "Choose engine"), contentType: .localChoice),
+        SetupStep(
+          id: "model", title: String(localized: "Install model"), contentType: .localModelInstall),
+        SetupStep(
+          id: "test", title: String(localized: "Test connection"),
           contentType: .information(
-            "Test Connection",
-            "Click the button below to verify your local server responds to a simple chat completion."
+            String(localized: "Test Connection"),
+            String(
+              localized:
+                "Click the button below to verify your local server responds to a simple chat completion."
+            )
           )),
         SetupStep(
-          id: "complete", title: "Complete",
+          id: "complete", title: String(localized: "Complete"),
           contentType: .information(
-            "All set!", "Local AI is configured and ready to use with Dayflow.")),
+            String(localized: "All set!"),
+            String(localized: "Local AI is configured and ready to use with Dayflow."))),
       ]
     case .chatGPT, .claude:
-      let isClaude = provider == .claude
-      preferredCLITool = isClaude ? .claude : .codex
-      let providerName = isClaude ? "Claude" : "ChatGPT"
-      let cliName = isClaude ? "Claude Code" : "Codex CLI"
-      steps = [
-        SetupStep(
-          id: "intro",
-          title: "Before you begin",
-          contentType: .information(
-            "Install \(cliName)",
-            "Dayflow uses \(cliName) through your existing \(providerName) subscription. Install it and sign in on this Mac, then we'll verify the connection."
-          )
-        ),
-        SetupStep(
-          id: "detect",
-          title: "Check installations",
-          contentType: .cliDetection
-        ),
-        SetupStep(
-          id: "test",
-          title: "Test connection",
-          contentType: .information(
-            "Test Connection",
-            "Run a quick test to verify your CLI is working and signed in."
-          )
-        ),
-        SetupStep(
-          id: "complete",
-          title: "Complete",
-          contentType: .information(
-            "All set!",
-            "\(providerName) is configured and ready to use with Dayflow."
-          )
-        ),
-      ]
+      preferredCLITool = provider == .claude ? .claude : .codex
+      steps = chatCLISteps(for: provider)
       codexCLIStatus = .unknown
       claudeCLIStatus = .unknown
       codexCLIReport = nil
@@ -171,25 +149,31 @@ class ProviderSetupState: ObservableObject {
       steps = [
         SetupStep(
           id: "intro",
-          title: "Configure endpoint",
+          title: String(localized: "Configure endpoint"),
           contentType: .information(
-            "Connect an OpenAI-compatible endpoint",
-            "Use OpenRouter or another endpoint that supports OpenAI Chat Completions with image input. The connection test sends one image and may incur a small provider charge."
+            String(localized: "Connect an OpenAI-compatible endpoint"),
+            String(
+              localized:
+                "Use OpenRouter or another endpoint that supports OpenAI Chat Completions with image input. The connection test sends one image and may incur a small provider charge."
+            )
           )
         ),
         SetupStep(
           id: "test",
-          title: "Test connection",
+          title: String(localized: "Test connection"),
           contentType: .information(
-            "Test Connection",
-            "Enter the endpoint, model, and API key, then verify a multimodal response."
+            String(localized: "Test Connection"),
+            String(
+              localized:
+                "Enter the endpoint, model, and API key, then verify a multimodal response.")
           )
         ),
         SetupStep(
           id: "complete",
-          title: "Complete",
+          title: String(localized: "Complete"),
           contentType: .information(
-            "All set!", "Your OpenAI-compatible provider is ready to use with Dayflow."
+            String(localized: "All set!"),
+            String(localized: "Your OpenAI-compatible provider is ready to use with Dayflow.")
           )
         ),
       ]
@@ -200,21 +184,85 @@ class ProviderSetupState: ObservableObject {
       hasStoredGeminiAPIKey = !storedGeminiKey.isEmpty
       steps = [
         SetupStep(
-          id: "getkey", title: "Get API key",
+          id: "getkey", title: String(localized: "Get API key"),
           contentType: .apiKeyInstructions),
         SetupStep(
-          id: "enterkey", title: "Enter API key",
+          id: "enterkey", title: String(localized: "Enter API key"),
           contentType: .apiKeyInput),
         SetupStep(
-          id: "verify", title: "Test connection",
+          id: "verify", title: String(localized: "Test connection"),
           contentType: .information(
-            "Test Connection", "Click the button below to verify your API key works with Gemini")),
+            String(localized: "Test Connection"),
+            String(localized: "Click the button below to verify your API key works with Gemini"))),
         SetupStep(
-          id: "complete", title: "Complete",
+          id: "complete", title: String(localized: "Complete"),
           contentType: .information(
-            "All set!", "Gemini is now configured and ready to use with Dayflow.")),
+            String(localized: "All set!"),
+            String(localized: "Gemini is now configured and ready to use with Dayflow."))),
       ]
     }
+  }
+
+  private func chatCLISteps(for provider: LLMProviderID) -> [SetupStep] {
+    let isClaude = provider == .claude
+    let providerName = isClaude ? "Claude" : "ChatGPT"
+    let cliName = isClaude ? "Claude Code" : "Codex CLI"
+    return [
+      SetupStep(
+        id: "intro",
+        title: String(localized: "Before you begin"),
+        contentType: .information(
+          "",
+          String(
+            localized:
+              "Dayflow uses \(cliName) through your existing \(providerName) subscription. Install it and sign in on this Mac, then we'll verify the connection."
+          )
+        )
+      ),
+      SetupStep(
+        id: "detect",
+        title: String(localized: "Check installations"),
+        contentType: .cliDetection
+      ),
+      SetupStep(
+        id: "test",
+        title: String(localized: "Test connection"),
+        contentType: .information(
+          String(localized: "Test Connection"),
+          String(localized: "Run a quick test to verify your CLI is working and signed in.")
+        )
+      ),
+      SetupStep(
+        id: "complete",
+        title: String(localized: "Complete"),
+        contentType: .information(
+          String(localized: "All set!"),
+          String(localized: "\(providerName) is configured and ready to use with Dayflow.")
+        )
+      ),
+    ]
+  }
+
+  /// Swap the active chat-CLI provider mid-flow (e.g. user picked ChatGPT but selects
+  /// Claude on the detection step). Rewrites the step copy in place without resetting
+  /// detection results or the user's position in the flow.
+  private func switchChatCLIProvider(to provider: LLMProviderID) {
+    guard configuredProviderID == .chatGPT || configuredProviderID == .claude,
+      provider == .chatGPT || provider == .claude,
+      provider != configuredProviderID
+    else { return }
+    configuredProviderID = provider
+    let refreshedSteps = chatCLISteps(for: provider)
+    for (index, refreshed) in refreshedSteps.enumerated() where index < steps.count {
+      var step = refreshed
+      if steps[index].isCompleted {
+        step.markCompleted()
+      }
+      steps[index] = step
+    }
+    // The connection test targets the selected CLI, so a switch invalidates it
+    hasTestedConnection = false
+    testSuccessful = false
   }
 
   func goNext() {
@@ -339,26 +387,22 @@ class ProviderSetupState: ObservableObject {
   }
 
   func selectPreferredCLITool(_ tool: CLITool) {
-    if let fixedTool = fixedCLITool, tool != fixedTool { return }
-    guard isToolAvailable(tool) else { return }
+    guard preferredCLITool != tool else { return }
     preferredCLITool = tool
+    switchChatCLIProvider(to: tool == .claude ? .claude : .chatGPT)
     captureChatCLIToolSelected(tool)
   }
 
   func ensurePreferredCLIToolIsValid() {
-    if let fixedCLITool {
-      preferredCLITool = fixedCLITool
-      return
-    }
-    if let current = preferredCLITool, isToolAvailable(current) {
+    // Keep an explicit selection even if that CLI isn't installed yet — the
+    // Next button stays disabled until it's detected.
+    if preferredCLITool != nil {
       return
     }
     if isToolAvailable(.codex) {
       preferredCLITool = .codex
     } else if isToolAvailable(.claude) {
       preferredCLITool = .claude
-    } else {
-      preferredCLITool = nil
     }
   }
 
@@ -430,17 +474,6 @@ class ProviderSetupState: ObservableObject {
     case .claude:
       if claudeCLIStatus.isInstalled { return true }
       return claudeCLIReport?.resolvedPath != nil
-    }
-  }
-
-  private var fixedCLITool: CLITool? {
-    switch configuredProviderID {
-    case .chatGPT:
-      return .codex
-    case .claude:
-      return .claude
-    default:
-      return nil
     }
   }
 

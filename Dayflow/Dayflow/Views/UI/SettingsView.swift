@@ -22,13 +22,13 @@ struct SettingsView: View {
 
     var title: String {
       switch self {
-      case .account: return "Account"
-      case .storage: return "Storage"
-      case .privacy: return "Privacy"
-      case .providers: return "Providers"
-      case .aiTools: return "MCP / CLI"
-      case .data: return "Export"
-      case .other: return "Other"
+      case .account: return String(localized: "Account")
+      case .storage: return String(localized: "Storage")
+      case .privacy: return String(localized: "Privacy")
+      case .providers: return String(localized: "Providers")
+      case .aiTools: return String(localized: "MCP / CLI")
+      case .data: return String(localized: "Export")
+      case .other: return String(localized: "Other")
       }
     }
   }
@@ -47,7 +47,6 @@ struct SettingsView: View {
 
   var body: some View {
     contentWithSheets
-      .environment(\.colorScheme, .light)
   }
 
   private var contentWithSheets: some View {
@@ -71,8 +70,8 @@ struct SettingsView: View {
         LLMProviderSetupView(
           providerType: wrapper.providerID,
           onBack: { providersViewModel.cancelProviderSetup() },
-          onComplete: {
-            let succeeded = providersViewModel.handleProviderSetupCompletion(wrapper.providerID)
+          onComplete: { configuredProviderID in
+            let succeeded = providersViewModel.handleProviderSetupCompletion(configuredProviderID)
             if succeeded {
               providersViewModel.cancelProviderSetup()
             }
@@ -176,7 +175,7 @@ struct SettingsView: View {
     VStack(alignment: .leading, spacing: 0) {
       Text("Settings")
         .font(.custom("InstrumentSerif-Regular", size: 22))
-        .foregroundColor(.black.opacity(0.9))
+        .foregroundColor(SettingsStyle.text)
         .padding(.leading, 10)
         .padding(.bottom, 18)
 
@@ -202,7 +201,7 @@ struct SettingsView: View {
     return VStack(alignment: .leading, spacing: 8) {
       Text("Dayflow v\(version)")
         .font(.custom("Figtree", size: 11))
-        .foregroundColor(.black.opacity(0.4))
+        .foregroundColor(SettingsStyle.meta)
 
       Button {
         NotificationCenter.default.post(name: .showWhatsNew, object: nil)
@@ -214,7 +213,7 @@ struct SettingsView: View {
           Image(systemName: "arrow.up.right")
             .font(.system(size: 9, weight: .semibold))
         }
-        .foregroundColor(Color(red: 0.25, green: 0.17, blue: 0))
+        .foregroundColor(SettingsStyle.ink)
       }
       .buttonStyle(.plain)
       .pointingHandCursor()
@@ -230,14 +229,14 @@ struct SettingsView: View {
       Text(tab.title)
         .font(.custom("Figtree", size: 13))
         .fontWeight(.semibold)
-        .foregroundColor(.black.opacity(selectedTab == tab ? 0.9 : 0.55))
+        .foregroundColor(selectedTab == tab ? SettingsStyle.text : SettingsStyle.secondary)
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, 8)
         .padding(.horizontal, 10)
         .background {
           if selectedTab == tab {
             RoundedRectangle(cornerRadius: 7)
-              .fill(Color.black.opacity(0.06))
+              .fill(SettingsStyle.subtleFill)
               .matchedGeometryEffect(id: "sidebarSelection", in: sidebarSelectionNamespace)
           }
         }

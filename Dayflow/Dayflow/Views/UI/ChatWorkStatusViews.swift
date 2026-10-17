@@ -5,6 +5,8 @@ import SwiftUI
 // MARK: - Work Status Card
 
 struct WorkStatusCard: View {
+  @Environment(\.dayflowTheme) private var theme
+
   let status: ChatWorkStatus
   @Binding var showDetails: Bool
 
@@ -30,12 +32,13 @@ struct WorkStatusCard: View {
         if status.hasDetails {
           Button(action: { showDetails.toggle() }) {
             HStack(spacing: 4) {
-              Text(showDetails ? "Hide details" : "Show details")
+              Text(
+                showDetails ? String(localized: "Hide details") : String(localized: "Show details"))
               Image(systemName: showDetails ? "chevron.up" : "chevron.down")
                 .font(.system(size: 9, weight: .semibold))
             }
             .font(.custom("Figtree", size: 11).weight(.semibold))
-            .foregroundColor(Color(hex: "8B5E3C"))
+            .foregroundColor(theme.textSecondary)
           }
           .buttonStyle(DayflowPressScaleButtonStyle(pressedScale: 0.97))
           .pointingHandCursor()
@@ -45,10 +48,10 @@ struct WorkStatusCard: View {
         {
           Text(status.thinkingText.trimmingCharacters(in: .whitespacesAndNewlines))
             .font(.system(size: 10, design: .monospaced))
-            .foregroundColor(Color(hex: "666666"))
+            .foregroundColor(theme.textSecondary)
             .textSelection(.enabled)
             .padding(8)
-            .background(Color(hex: "FFFFFF").opacity(0.6))
+            .background(theme.chatCodeFill)
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         }
       }
@@ -80,7 +83,7 @@ struct WorkStatusCard: View {
         }
       }
       .font(.custom("Figtree", size: 12).weight(.semibold))
-      .foregroundColor(Color(hex: "4A4A4A"))
+      .foregroundColor(theme.textPrimary)
 
       Spacer()
     }
@@ -89,13 +92,13 @@ struct WorkStatusCard: View {
   var headerTitle: String {
     switch status.stage {
     case .thinking:
-      return "Thinking"
+      return String(localized: "Thinking")
     case .runningTools:
-      return "Running tools"
+      return String(localized: "Running tools")
     case .answering:
-      return "Answering"
+      return String(localized: "Answering")
     case .error:
-      return "Something went wrong"
+      return String(localized: "Something went wrong")
     }
   }
 
@@ -126,25 +129,25 @@ struct WorkStatusCard: View {
     case .error:
       return Color(hex: "C62828")
     default:
-      return Color(hex: "F96E00")
+      return theme.accentText
     }
   }
 
   var backgroundColor: Color {
     switch status.stage {
     case .error:
-      return Color(hex: "FFEBEE")
+      return Color(hex: "C62828").opacity(0.12)
     default:
-      return Color(hex: "FFF4E9")
+      return theme.chatSoftAccentFill
     }
   }
 
   var borderColor: Color {
     switch status.stage {
     case .error:
-      return Color(hex: "FFCDD2")
+      return Color(hex: "C62828").opacity(0.35)
     default:
-      return Color(hex: "F96E00").opacity(0.2)
+      return theme.chatSoftAccentBorder
     }
   }
 }
@@ -162,6 +165,8 @@ struct AnimatedEllipsis: View {
 }
 
 struct ToolStatusRow: View {
+  @Environment(\.dayflowTheme) private var theme
+
   let tool: ChatWorkStatus.ToolRun
   let showDetails: Bool
 
@@ -178,18 +183,18 @@ struct ToolStatusRow: View {
       if showDetails {
         Text(tool.command)
           .font(.system(size: 10, design: .monospaced))
-          .foregroundColor(Color(hex: "666666"))
+          .foregroundColor(theme.textSecondary)
           .textSelection(.enabled)
           .lineLimit(3)
 
         if !trimmedOutput.isEmpty {
           Text(trimmedOutput)
             .font(.system(size: 10, design: .monospaced))
-            .foregroundColor(Color(hex: "555555"))
+            .foregroundColor(theme.textSecondary)
             .lineLimit(6)
             .textSelection(.enabled)
             .padding(6)
-            .background(Color(hex: "FFFFFF").opacity(0.6))
+            .background(theme.chatCodeFill)
             .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
         }
       }
@@ -206,7 +211,7 @@ struct ToolStatusRow: View {
     case .running:
       ProgressView()
         .scaleEffect(0.6)
-        .tint(Color(hex: "F96E00"))
+        .tint(theme.accentText)
     case .completed:
       Image(systemName: "checkmark.circle.fill")
         .font(.system(size: 12, weight: .semibold))
@@ -223,7 +228,7 @@ struct ToolStatusRow: View {
     case .failed:
       return Color(hex: "C62828")
     default:
-      return Color(hex: "4A4A4A")
+      return theme.textPrimary
     }
   }
 }

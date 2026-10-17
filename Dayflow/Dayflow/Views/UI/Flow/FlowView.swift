@@ -2,18 +2,21 @@
 //  FlowView.swift
 //  Dayflow
 //
-//  Flow tab: hosts the remote Flow web app. Requires being signed in (the web
-//  app talks to the backend with the user's session token) and online.
+//  Flow tab: hosts the remote Flow web app for accounts with Flow access
+//  (the web app talks to the backend with the user's session token). Everyone
+//  else, signed in or not, sees the waitlist.
 //
 
 import SwiftUI
 
 struct FlowView: View {
+  @Environment(\.dayflowTheme) private var theme
   @ObservedObject private var authManager = DayflowAuthManager.shared
 
   @State private var loadState: LoadState = .loading
   /// Bumped to tear down and recreate the webview on retry.
   @State private var reloadToken = 0
+  @State private var showingSupport = false
 
   private enum LoadState {
     case loading
@@ -23,16 +26,29 @@ struct FlowView: View {
 
   var body: some View {
     ZStack {
-      if authManager.user == nil {
-        signedOutView
-      } else {
+      if (!authManager.hasLoadedStoredSession || authManager.isRestoringStoredSession)
+        && FlowWaitlistRegistration().email.isEmpty
+      {
+        ProgressView()
+      } else if authManager.flowEnabled {
         webContent
+      } else if authManager.hasUnrestoredSession && !authManager.isRestoringStoredSession {
+        // Signed in, but the account couldn't be fetched: not a waitlist case.
+        errorView(
+          title: "Flow needs an internet connection",
+          message: String(
+            localized: "Dayflow couldn't reach your account. Check your connection and try again.")
+        ) {
+          Task { await authManager.restoreStoredSession() }
+        }
+      } else {
+        FlowWaitlistView()
       }
-      #if DEBUG
-        FlowAgentLogPanel()
-      #endif
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
+    .task {
+      await authManager.restoreStoredSession()
+    }
   }
 
   private var webContent: some View {
@@ -43,6 +59,8 @@ struct FlowView: View {
           loadState = .loaded
         case .failed(let error):
           loadState = .failed(error.localizedDescription)
+        case .supportRequested:
+          showingSupport = true
         }
       }
       .id(reloadToken)
@@ -52,11 +70,20 @@ struct FlowView: View {
       case .loading:
         ProgressView()
       case .failed(let message):
-        errorView(message: message)
+        errorView(title: "Couldn't load Flow", message: message) {
+          loadState = .loading
+          reloadToken += 1
+        }
       case .loaded:
         EmptyView()
       }
+
+      if showingSupport {
+        FlowSupportChatView { showingSupport = false }
+          .transition(.opacity)
+      }
     }
+    .animation(.easeOut(duration: 0.15), value: showingSupport)
   }
 
   private var isLoaded: Bool {
@@ -64,115 +91,26 @@ struct FlowView: View {
     return false
   }
 
-  private var signedOutView: some View {
-    VStack(spacing: 16) {
-      Image(systemName: "water.waves")
-        .font(.system(size: 40))
-        .foregroundColor(Color(hex: "F96E00"))
-      Text("Sign in to use Flow")
-        .font(.custom("Figtree", size: 20).weight(.semibold))
-        .foregroundColor(.black)
-      Text("Flow sessions sync with your Dayflow account.")
-        .font(.custom("Figtree", size: 14))
-        .foregroundColor(.black.opacity(0.6))
-      Button("Sign in") {
-        NotificationCenter.default.post(name: .openAccountSettings, object: nil)
-      }
-      .buttonStyle(.borderedProminent)
-      .tint(Color(hex: "F96E00"))
-    }
-  }
-
-  #if DEBUG
-    /// Debug-only transcript of the distraction agent: every reply the Codex
-    /// CLI produced during the session, nothing else.
-    private struct FlowAgentLogPanel: View {
-      @ObservedObject private var agent = FlowDistractionAgent.shared
-      @State private var isOpen = false
-
-      var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-          Spacer()
-          if isOpen {
-            logList
-          }
-          Button(isOpen ? "Hide agent log" : "Agent log (\(agent.transcript.count))") {
-            isOpen.toggle()
-          }
-          .buttonStyle(.plain)
-          .font(.system(size: 11, weight: .medium))
-          .foregroundColor(.white)
-          .padding(.horizontal, 10)
-          .padding(.vertical, 5)
-          .background(Capsule().fill(Color.black.opacity(0.6)))
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
-        .allowsHitTesting(true)
-      }
-
-      private var logList: some View {
-        ScrollViewReader { proxy in
-          ScrollView {
-            VStack(alignment: .leading, spacing: 8) {
-              if agent.transcript.isEmpty {
-                Text("No agent output yet.")
-                  .font(.system(size: 11))
-                  .foregroundColor(.white.opacity(0.6))
-              }
-              ForEach(agent.transcript) { entry in
-                VStack(alignment: .leading, spacing: 2) {
-                  Text(entry.date, format: .dateTime.hour().minute().second())
-                    .font(.system(size: 9, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.5))
-                  Text(entry.text)
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundColor(.white)
-                    .textSelection(.enabled)
-                    .fixedSize(horizontal: false, vertical: true)
-                }
-                .id(entry.id)
-              }
-            }
-            .padding(10)
-            .frame(maxWidth: .infinity, alignment: .leading)
-          }
-          .frame(width: 420, height: 260)
-          .background(RoundedRectangle(cornerRadius: 10).fill(Color.black.opacity(0.75)))
-          .onChange(of: agent.transcript) {
-            if let last = agent.transcript.last {
-              proxy.scrollTo(last.id, anchor: .bottom)
-            }
-          }
-          .onAppear {
-            if let last = agent.transcript.last {
-              proxy.scrollTo(last.id, anchor: .bottom)
-            }
-          }
-        }
-      }
-    }
-  #endif
-
-  private func errorView(message: String) -> some View {
+  private func errorView(
+    title: LocalizedStringKey,
+    message: String,
+    onRetry: @escaping () -> Void
+  ) -> some View {
     VStack(spacing: 16) {
       Image(systemName: "wifi.slash")
         .font(.system(size: 40))
-        .foregroundColor(.black.opacity(0.4))
-      Text("Couldn't load Flow")
+        .foregroundColor(theme.textMuted)
+      Text(title)
         .font(.custom("Figtree", size: 20).weight(.semibold))
-        .foregroundColor(.black)
+        .foregroundColor(theme.textPrimary)
       Text(message)
         .font(.custom("Figtree", size: 13))
-        .foregroundColor(.black.opacity(0.6))
+        .foregroundColor(theme.textSecondary)
         .multilineTextAlignment(.center)
         .frame(maxWidth: 360)
-      Button("Retry") {
-        loadState = .loading
-        reloadToken += 1
-      }
-      .buttonStyle(.borderedProminent)
-      .tint(Color(hex: "F96E00"))
+      Button("Retry", action: onRetry)
+        .buttonStyle(.borderedProminent)
+        .tint(theme.accent)
     }
   }
 }

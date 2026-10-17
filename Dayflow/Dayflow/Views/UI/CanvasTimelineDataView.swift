@@ -6,8 +6,7 @@ import SwiftUI
 
 private let cachedTimeFormatter: DateFormatter = {
   let formatter = DateFormatter()
-  formatter.dateFormat = "h:mm a"
-  formatter.locale = Locale(identifier: "en_US_POSIX")
+  formatter.timeStyle = .short
   return formatter
 }()
 
@@ -70,7 +69,10 @@ struct CanvasTimelineDataView: View {
   let cardNormalVerticalPadding: CGFloat
   let cardHoverScale: CGFloat
   let cardPressedScale: CGFloat
+  // Categories turned off in the chip row; their cards render dimmed.
+  var mutedCategoryKeys: Set<String> = []
 
+  @Environment(\.dayflowTheme) private var theme
   @State private var selectedCardId: String? = nil
   @State private var positionedActivities: [CanvasPositionedActivity] = []
   @State private var recordingProjection: TimelineRecordingProjectionWindow?
@@ -148,8 +150,12 @@ struct CanvasTimelineDataView: View {
         handleDayTimelineDidBecomeActive()
       }
       .onPreferenceChange(TimelineCardsLayerFramePreferenceKey.self) { frame in
-        cardsLayerFrame = frame
-        updateWeeklyHoursIntersection()
+        // Preference callbacks fire mid-layout; writing state that feeds the
+        // card ForEach from here can trip AttributeGraph. Defer one turn.
+        DispatchQueue.main.async {
+          cardsLayerFrame = frame
+          updateWeeklyHoursIntersection()
+        }
       }
       .onChange(of: weeklyHoursFrame) {
         updateWeeklyHoursIntersection()
@@ -261,12 +267,13 @@ struct CanvasTimelineDataView: View {
     .background(Color.clear)
   }
 
+  // Figma draws each hour line as a dashed hairline.
   private var hourLines: some View {
     VStack(spacing: 0) {
       ForEach(0..<(CanvasConfig.endHour - CanvasConfig.startHour), id: \.self) { _ in
         VStack(spacing: 0) {
-          Rectangle()
-            .fill(Color.black.opacity(0.1))
+          DashedHorizontalLine()
+            .stroke(theme.hourLine, style: StrokeStyle(lineWidth: 0.75, dash: [2, 2]))
             .frame(height: 0.75)
           Spacer()
         }
@@ -275,13 +282,24 @@ struct CanvasTimelineDataView: View {
     }
   }
 
+  /// Hour labels for hours that haven't happened yet (today only) are dimmed.
+  private func hourLabelColor(for hour: Int) -> Color {
+    guard timelineIsToday(selectedDate) else { return theme.hourLabel }
+    let now = Calendar.current.component(.hour, from: Date())
+    let nowIndex =
+      now >= CanvasConfig.startHour
+      ? now - CanvasConfig.startHour : (24 - CanvasConfig.startHour) + now
+    let hourIndex = hour - CanvasConfig.startHour
+    return hourIndex > nowIndex ? theme.hourLabelFuture : theme.hourLabel
+  }
+
   private var timeColumn: some View {
     VStack(spacing: 0) {
       ForEach(CanvasConfig.startHour..<CanvasConfig.endHour, id: \.self) { hour in
         let hourIndex = hour - CanvasConfig.startHour
         Text(formatHour(hour))
           .font(.custom("Figtree", size: timeLabelFontSize))
-          .foregroundColor(Color(hex: "594838"))
+          .foregroundColor(hourLabelColor(for: hour))
           .padding(.trailing, 5)
           .padding(.top, 2)
           .frame(width: CanvasConfig.timeColumnWidth, alignment: .trailing)
@@ -359,6 +377,8 @@ struct CanvasTimelineDataView: View {
           )
           .frame(width: geo.size.width, height: item.height)
           .position(x: geo.size.width / 2, y: item.yPosition + (item.height / 2))
+          .opacity(mutedCategoryKeys.contains(categoryFilterKey(item.categoryName)) ? 0.25 : 1)
+          .animation(.easeOut(duration: 0.15), value: mutedCategoryKeys)
           // Staggered entrance animation (Emil Kowalski: sequential reveal creates polish)
           .opacity(isVisible ? 1 : 0)
           .offset(x: isVisible ? 0 : 12)
@@ -405,13 +425,13 @@ struct CanvasTimelineDataView: View {
         timelineStatusCard(
           height: projectionHeight,
           yPosition: calculateYPosition(for: projection.start) + 1,
-          gradient: recordingStatusGradient,
-          gradientOpacity: 0.70,
-          baseColor: Color(hex: "D9C6BA"),
-          strokeColor: Color.white.opacity(0.52),
-          strokeWidth: 0.75,
-          shadowColor: .black.opacity(0.10),
-          shadowRadius: 4
+          gradient: theme.generatingGradient,
+          gradientOpacity: 1.0,
+          baseColor: theme.panelSolid,
+          strokeColor: .clear,
+          strokeWidth: 0,
+          shadowColor: .clear,
+          shadowRadius: 0
         ) {
           if !isCompactProjection {
             generatingStatusText
@@ -422,13 +442,13 @@ struct CanvasTimelineDataView: View {
         timelineStatusCard(
           height: projectionHeight,
           yPosition: calculateYPosition(for: projection.start) + 1,
-          gradient: pausedStatusGradient,
+          gradient: theme.pausedCardGradient,
           gradientOpacity: 1.0,
-          baseColor: .clear,
-          strokeColor: .white,
-          strokeWidth: 1,
-          shadowColor: .black.opacity(0.03),
-          shadowRadius: 2,
+          baseColor: theme.panelSolid,
+          strokeColor: theme.cardBorder.opacity(0.6),
+          strokeWidth: 0.5,
+          shadowColor: .clear,
+          shadowRadius: 0,
           onTap: handlePausedStatusCardTap
         ) {
           pausedStatusText
@@ -438,13 +458,13 @@ struct CanvasTimelineDataView: View {
         timelineStatusCard(
           height: projectionHeight,
           yPosition: calculateYPosition(for: projection.start) + 1,
-          gradient: pausedStatusGradient,
+          gradient: theme.pausedCardGradient,
           gradientOpacity: 1.0,
-          baseColor: .clear,
-          strokeColor: .white,
-          strokeWidth: 1,
-          shadowColor: .black.opacity(0.03),
-          shadowRadius: 2,
+          baseColor: theme.panelSolid,
+          strokeColor: theme.cardBorder.opacity(0.6),
+          strokeWidth: 0.5,
+          shadowColor: .clear,
+          shadowRadius: 0,
           onTap: handlePausedStatusCardTap
         ) {
           stoppedStatusText
@@ -505,30 +525,6 @@ struct CanvasTimelineDataView: View {
     .allowsHitTesting(onTap != nil)
   }
 
-  private var recordingStatusGradient: LinearGradient {
-    LinearGradient(
-      stops: [
-        .init(color: Color(hex: "5E7FC0"), location: 0.00),
-        .init(color: Color(hex: "D88ECE"), location: 0.35),
-        .init(color: Color(hex: "FFC19E"), location: 0.68),
-        .init(color: Color(hex: "FFEDE0"), location: 1.00),
-      ],
-      startPoint: .leading,
-      endPoint: .trailing
-    )
-  }
-
-  private var pausedStatusGradient: LinearGradient {
-    LinearGradient(
-      stops: [
-        .init(color: Color(hex: "F7E6D5"), location: 0.13),
-        .init(color: Color(hex: "DADEE4"), location: 1.00),
-      ],
-      startPoint: .leading,
-      endPoint: .trailing
-    )
-  }
-
   private var generatingStatusText: some View {
     HStack(spacing: 8) {
       TimelineThinkingSpinner(
@@ -551,14 +547,16 @@ struct CanvasTimelineDataView: View {
   private var pausedStatusText: some View {
     statusText(
       iconName: "pause.fill",
-      message: "Dayflow is paused. Click 'Resume' to generate new activity cards."
+      message: String(
+        localized: "Dayflow is paused. Click 'Resume' to generate new activity cards.")
     )
   }
 
   private var stoppedStatusText: some View {
     statusText(
       iconName: "play.fill",
-      message: "Dayflow isn't recording. Click 'Resume' to generate new activity cards."
+      message: String(
+        localized: "Dayflow isn't recording. Click 'Resume' to generate new activity cards.")
     )
   }
 
@@ -566,7 +564,7 @@ struct CanvasTimelineDataView: View {
     HStack(spacing: 10) {
       Image(systemName: iconName)
         .font(.system(size: 11, weight: .semibold))
-        .foregroundColor(Color(hex: "888D95"))
+        .foregroundColor(theme.pausedCardText)
       Text(message)
     }
     .font(
@@ -575,7 +573,7 @@ struct CanvasTimelineDataView: View {
     )
     .lineSpacing(2.4)
     .tracking(0)
-    .foregroundColor(Color(hex: "888D95"))
+    .foregroundColor(theme.pausedCardText)
     .lineLimit(1)
     .truncationMode(.tail)
   }
@@ -813,10 +811,10 @@ struct CanvasTimelineDataView: View {
 
   private func formatHour(_ hour: Int) -> String {
     let normalizedHour = hour >= 24 ? hour - 24 : hour
-    let adjustedHour =
-      normalizedHour > 12 ? normalizedHour - 12 : (normalizedHour == 0 ? 12 : normalizedHour)
-    let period = normalizedHour >= 12 ? "PM" : "AM"
-    return "\(adjustedHour):00 \(period)"
+    let date =
+      Calendar.current.date(bySettingHour: normalizedHour, minute: 0, second: 0, of: Date())
+      ?? Date()
+    return cachedTimeFormatter.string(from: date)
   }
 
   private func formatRange(start: Date, end: Date) -> String {
@@ -837,11 +835,20 @@ struct CanvasTimelineDataView: View {
     let baseNSColor = NSColor(hex: category.colorHex) ?? NSColor(hex: "#4F80EB") ?? .systemBlue
 
     return CanvasActivityCardStyle(
-      text: Color.black.opacity(0.9),
-      time: Color.black.opacity(0.7),
+      text: theme.cardTitle,
+      time: theme.cardTime,
       accent: Color(nsColor: baseNSColor),
       isIdle: category.isIdle
     )
+  }
+}
+
+private struct DashedHorizontalLine: Shape {
+  func path(in rect: CGRect) -> Path {
+    var path = Path()
+    path.move(to: CGPoint(x: rect.minX, y: rect.midY))
+    path.addLine(to: CGPoint(x: rect.maxX, y: rect.midY))
+    return path
   }
 }
 

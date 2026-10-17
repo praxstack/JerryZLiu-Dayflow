@@ -47,7 +47,6 @@ struct OnboardingPrototypeFlow: View {
   @State private var flowID = UUID().uuidString.lowercased()
   @State private var hasTrackedStart = false
   @State private var hasTrackedCompletion = false
-  @State private var userHasPaidAI: Bool?
 
   init(
     initialStep: OnboardingPrototypeStep = .introVideo,
@@ -107,7 +106,6 @@ struct OnboardingPrototypeFlow: View {
       case .preferences:
         OnboardingPrototypePreferencesStep(
           onContinue: { hasPaidAI in
-            userHasPaidAI = hasPaidAI
             OnboardingPrototypeAnalytics.trackStepCompleted(
               step: .preferences,
               flowID: flowID,
@@ -123,7 +121,6 @@ struct OnboardingPrototypeFlow: View {
 
       case .chooseProvider:
         OnboardingPrototypeChooseProviderStep(
-          hasPaidAI: userHasPaidAI ?? false,
           flowID: flowID,
           flowVariant: flowVariant,
           onSelect: { provider in
@@ -153,10 +150,7 @@ struct OnboardingPrototypeFlow: View {
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .background {
-      Image("OnboardingBackgroundv2")
-        .resizable()
-        .aspectRatio(contentMode: .fill)
-        .ignoresSafeArea()
+      OnboardingBackdrop()
     }
     .preferredColorScheme(.light)
     .onAppear {
@@ -239,12 +233,13 @@ private struct OnboardingPrototypePlaceholderStep: View {
           },
           background: .white,
           foreground: Color(red: 0.25, green: 0.17, blue: 0),
-          borderColor: .clear,
-          cornerRadius: 8,
-          horizontalPadding: 28,
-          verticalPadding: 14,
+          borderColor: Color(hex: "B6B6B6"),
+          cornerRadius: 200,
+          horizontalPadding: 12,
+          verticalPadding: 0,
           minWidth: 170,
-          isSecondaryStyle: true
+          fixedHeight: 36,
+          showShadow: false
         )
 
         DayflowSurfaceButton(
@@ -254,14 +249,15 @@ private struct OnboardingPrototypePlaceholderStep: View {
               .font(.custom("Figtree", size: 15))
               .fontWeight(.semibold)
           },
-          background: Color(red: 0.25, green: 0.17, blue: 0),
+          background: Color(hex: "FF9F6F"),
           foreground: .white,
-          borderColor: .clear,
-          cornerRadius: 8,
+          borderColor: Color(hex: "F4C8B1"),
+          cornerRadius: 200,
           horizontalPadding: 28,
           verticalPadding: 14,
           minWidth: 170,
-          showOverlayStroke: true
+          showOverlayStroke: false,
+          innerGlowColor: Color(hex: "FFDCCB").opacity(0.9)
         )
       }
     }
@@ -358,7 +354,6 @@ enum OnboardingPrototypeAnalytics {
   static func trackDayflowProSelected(
     flowID: String,
     flowVariant: String,
-    hasPaidAI: Bool,
     selectionStage: String
   ) {
     capture(
@@ -367,7 +362,6 @@ enum OnboardingPrototypeAnalytics {
         step: nil,
         flowID: flowID,
         flowVariant: flowVariant,
-        hasPaidAI: hasPaidAI,
         extraProps: ["selection_stage": selectionStage]
       )
     )
@@ -376,16 +370,14 @@ enum OnboardingPrototypeAnalytics {
   static func trackDayflowProStepViewed(
     step: DayflowProOnboardingStep,
     flowID: String,
-    flowVariant: String,
-    hasPaidAI: Bool
+    flowVariant: String
   ) {
     screen(
       "dayflow_pro_\(step.analyticsName)",
       dayflowProProps(
         step: step,
         flowID: flowID,
-        flowVariant: flowVariant,
-        hasPaidAI: hasPaidAI
+        flowVariant: flowVariant
       )
     )
     capture(
@@ -393,8 +385,7 @@ enum OnboardingPrototypeAnalytics {
       dayflowProProps(
         step: step,
         flowID: flowID,
-        flowVariant: flowVariant,
-        hasPaidAI: hasPaidAI
+        flowVariant: flowVariant
       )
     )
   }
@@ -405,8 +396,7 @@ enum OnboardingPrototypeAnalytics {
     result: DayflowAuthActionResult,
     step: DayflowProOnboardingStep,
     flowID: String,
-    flowVariant: String,
-    hasPaidAI: Bool
+    flowVariant: String
   ) {
     capture(
       eventName,
@@ -414,7 +404,6 @@ enum OnboardingPrototypeAnalytics {
         step: step,
         flowID: flowID,
         flowVariant: flowVariant,
-        hasPaidAI: hasPaidAI,
         extraProps: result.analyticsProps.merging(
           ["action": action],
           uniquingKeysWith: { _, new in new }
@@ -441,14 +430,12 @@ enum OnboardingPrototypeAnalytics {
     step: DayflowProOnboardingStep?,
     flowID: String,
     flowVariant: String,
-    hasPaidAI: Bool,
     extraProps: [String: Any] = [:]
   ) -> [String: Any] {
     var props: [String: Any] = [
       "flow_id": flowID,
       "flow_variant": flowVariant,
       "surface": "onboarding_dayflow_pro",
-      "has_paid_ai": hasPaidAI,
     ]
     if let step {
       props["dayflow_pro_step"] = step.analyticsName

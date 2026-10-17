@@ -36,6 +36,7 @@ struct TimelineRecordingProjectionWindow {
 }
 
 enum TimelineActivityLoader {
+  // Stored card titles are always the English sentinel, regardless of UI language.
   private static let failedTitle = "Processing failed"
   private static let failureGroupingGapTolerance: TimeInterval = 60
 
@@ -88,9 +89,7 @@ enum TimelineActivityLoader {
     for batchId: Int64,
     storageManager: StorageManaging
   ) -> Bool {
-    storageManager.screenshotsForBatch(batchId).contains { screenshot in
-      FileManager.default.fileExists(atPath: screenshot.filePath)
-    }
+    storageManager.screenshotsForBatch(batchId).contains(where: \.isAvailable)
   }
 
   static func buildActivities(from cards: [TimelineCard]) -> [TimelineActivity] {

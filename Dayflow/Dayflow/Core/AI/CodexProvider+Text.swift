@@ -8,7 +8,7 @@ extension CodexProvider {
       tool: .codex,
       prompt: prompt,
       workingDirectory: config.workingDirectory,
-      model: "gpt-5.4",
+      model: "gpt-5.6-luna",
       reasoningEffort: "low",
       sessionId: sessionId
     )
@@ -82,7 +82,7 @@ extension CodexProvider {
     }
 
     guard run.exitCode == 0 else {
-      let errorMessage = run.stderr.isEmpty ? "CLI exited with code \(run.exitCode)" : run.stderr
+      let errorMessage = run.failureMessage(toolName: "Codex CLI")
       let error = NSError(
         domain: "CodexProvider", code: Int(run.exitCode),
         userInfo: [NSLocalizedDescriptionKey: errorMessage])

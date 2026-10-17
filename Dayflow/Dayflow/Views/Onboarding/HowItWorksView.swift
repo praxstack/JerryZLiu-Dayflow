@@ -13,7 +13,7 @@ struct HowItWorksView: View {
   @State private var cardOpacities: [Double] = [0, 0, 0]
   @State private var buttonsOpacity: Double = 0
 
-  private let fullText = "How Dayflow Works"
+  private let fullText = String(localized: "How Dayflow Works")
 
   // Navigation callbacks
   var onBack: () -> Void
@@ -22,18 +22,27 @@ struct HowItWorksView: View {
   private let cards: [(icon: String, title: String, body: String)] = [
     (
       "OnboardingHow",
-      "Install and Forget",
-      "Dayflow takes periodic screen captures to understand what you're working on, all stored privately on your device. You can toggle this whenever you like."
+      String(localized: "Install and Forget"),
+      String(
+        localized:
+          "Dayflow takes periodic screen captures to understand what you're working on, all stored privately on your device. You can toggle this whenever you like."
+      )
     ),
     (
       "OnboardingSecurity",
-      "Privacy by Default",
-      "Dayflow can run entirely on local AI models, which means your data never leaves your computer. You can also find the source code below - please consider giving it a star on Github!"
+      String(localized: "Privacy by Default"),
+      String(
+        localized:
+          "Dayflow can run entirely on local AI models, which means your data never leaves your computer. You can also find the source code below - please consider giving it a star on Github!"
+      )
     ),
     (
       "OnboardingUnderstanding",
-      "Understand your Day",
-      "Knows the difference between YouTube tutorials and YouTube rabbit holes. Dayflow actually gets what you're working on."
+      String(localized: "Understand your Day"),
+      String(
+        localized:
+          "Knows the difference between YouTube tutorials and YouTube rabbit holes. Dayflow actually gets what you're working on."
+      )
     ),
   ]
 
@@ -76,20 +85,25 @@ struct HowItWorksView: View {
           content: { Text("Back").font(.custom("Figtree", size: 14)).fontWeight(.semibold) },
           background: .white,
           foreground: Color(red: 0.25, green: 0.17, blue: 0),
-          borderColor: .clear,
-          cornerRadius: 8,
-          horizontalPadding: 20,
-          verticalPadding: 12,
+          borderColor: Color(hex: "B6B6B6"),
+          cornerRadius: 200,
+          horizontalPadding: 32,
+          verticalPadding: 0,
           minWidth: 120,
-          isSecondaryStyle: true
+          fixedHeight: 44,
+          showShadow: false
         )
 
         Spacer()
 
         DayflowSurfaceButton(
           action: {
-            if let url = URL(string: "https://github.com/jerryzliu/Dayflow") {
-              NSWorkspace.shared.open(url)
+            GitHubStarPromptState.markDone()
+            Task {
+              let starred = await GitHubStarService.starDayflow()
+              if !starred {
+                NSWorkspace.shared.open(GitHubStarPromptState.repositoryURL)
+              }
             }
           },
           content: {
@@ -100,28 +114,37 @@ struct HowItWorksView: View {
               Text("Star Dayflow on GitHub").font(.custom("Figtree", size: 14)).fontWeight(.medium)
             }
           },
-          background: Color(red: 0.25, green: 0.17, blue: 0),
+          background: Color(hex: "FF9F6F"),
           foreground: .white,
-          borderColor: .clear,
-          cornerRadius: 8,
+          borderColor: Color(hex: "F4C8B1"),
+          cornerRadius: 200,
           horizontalPadding: 24,
           verticalPadding: 12,
-          showOverlayStroke: true
+          showOverlayStroke: false,
+          innerGlowColor: Color(hex: "FFDCCB").opacity(0.9)
         )
 
         Spacer()
 
         DayflowSurfaceButton(
           action: onNext,
-          content: { Text("Next").font(.custom("Figtree", size: 14)).fontWeight(.semibold) },
-          background: Color(red: 0.25, green: 0.17, blue: 0),
+          content: {
+            HStack(spacing: 6) {
+              Text("Next").font(.custom("Figtree", size: 14)).fontWeight(.semibold)
+              Image(systemName: "chevron.right").font(.system(size: 12, weight: .medium))
+            }
+            .padding(.leading, 4)
+          },
+          background: Color(hex: "FF9F6F"),
           foreground: .white,
-          borderColor: .clear,
-          cornerRadius: 8,
-          horizontalPadding: 20,
-          verticalPadding: 12,
+          borderColor: Color(hex: "F4C8B1"),
+          cornerRadius: 200,
+          horizontalPadding: 32,
+          verticalPadding: 0,
           minWidth: 120,
-          showOverlayStroke: true
+          fixedHeight: 44,
+          showOverlayStroke: false,
+          innerGlowColor: Color(hex: "FFDCCB").opacity(0.9)
         )
       }
       .frame(maxWidth: 600)  // Match card width

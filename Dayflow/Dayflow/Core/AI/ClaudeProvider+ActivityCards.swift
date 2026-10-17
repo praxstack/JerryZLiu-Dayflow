@@ -7,7 +7,7 @@ private enum ClaudeCardGenerationError: LocalizedError {
   var errorDescription: String? {
     switch self {
     case .empty:
-      return "No cards returned."
+      return String(localized: "No cards returned.")
     case .validationFailed(let details):
       return details
     }
@@ -215,7 +215,9 @@ extension ClaudeProvider {
 
     return normalizedCards
   }
+}
 
+extension TimelineOutputSupporting {
   func makeClaudeCardGenerationPlan(
     observations: [Observation],
     context: ActivityGenerationContext
@@ -242,8 +244,18 @@ extension ClaudeProvider {
 
       var boundary = firstStart
       var connected: [(card: ActivityCardData, interval: Range<Int>)] = []
-      for candidate in resolvedCards.reversed()
-      where candidate.1.upperBound >= boundary - ClaudeTimelineTolerance.sourceConnectionSeconds {
+      for candidate in resolvedCards.reversed() {
+        // Card timestamps omit seconds. Recover a rounded end only when an
+        // overlapping observation supports it, without widening real source gaps.
+        let cardEnd = candidate.1.upperBound
+        let supportedEnd =
+          observations.filter {
+            $0.startTs < cardEnd && $0.endTs >= cardEnd
+              && $0.endTs - cardEnd <= ClaudeTimelineTolerance.outputCoverageSeconds
+          }.map(\.endTs).max() ?? cardEnd
+        guard supportedEnd >= boundary - ClaudeTimelineTolerance.sourceConnectionSeconds else {
+          continue
+        }
         connected.append(candidate)
         boundary = min(boundary, candidate.1.lowerBound)
       }
@@ -299,7 +311,9 @@ extension ClaudeProvider {
       expectedEndTime: lastEnd.map { formatTimestampForPrompt($0) }
     )
   }
+}
 
+extension ClaudeProvider {
   func validateClaudeCardPolicy(
     _ cards: [ActivityCardData],
     requiresSingleCard: Bool,

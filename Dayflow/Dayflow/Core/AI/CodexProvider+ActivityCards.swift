@@ -15,9 +15,9 @@ extension CodexProvider {
       var errorDescription: String? {
         switch self {
         case .empty:
-          return "No cards returned."
+          return String(localized: "No cards returned.")
         case .decodeFailure:
-          return "Failed to decode cards."
+          return String(localized: "Failed to decode cards.")
         case .validationFailed(let details):
           return details
         }
@@ -29,9 +29,8 @@ extension CodexProvider {
     var actualPromptUsed = basePrompt
 
     let modelConfiguration = Self.activityCardModelConfiguration()
-    let legacyModelConfiguration = Self.legacyActivityCardModelConfiguration()
     var model = modelConfiguration.model
-    var effort = modelConfiguration.reasoningEffort
+    let effort = modelConfiguration.reasoningEffort
 
     var lastError: Error?
     var lastRun: ChatCLIRunResult?
@@ -111,6 +110,14 @@ extension CodexProvider {
           "[ChatCLI] generate_cards validation failed (attempt " + String(attempt) + "): "
             + combinedError)
       } catch {
+        if error is CancellationError { throw error }
+        if attempt < 3,
+          let fallback = Self.availabilityFallback(
+            for: model, error: error, stderr: lastRun?.stderr)
+        {
+          Self.recordModelFallback(from: model, to: fallback, operation: "generate_cards")
+          model = fallback
+        }
         lastError = error
         // Capture partial output from timeout errors for logging
         if let partialOut = (error as NSError).userInfo["partialStdout"] as? String,
@@ -123,23 +130,6 @@ extension CodexProvider {
             + error.localizedDescription + " — retrying")
         actualPromptUsed = basePrompt
         sessionId = nil
-        if attempt < 3,
-          Self.shouldUseLegacyModel(
-            after: error,
-            currentModel: model,
-            fallbackModel: legacyModelConfiguration.model
-          )
-        {
-          captureLegacyModelFallback(
-            operation: "generate_activity_cards",
-            fromModel: model,
-            toModel: legacyModelConfiguration.model,
-            batchId: batchId
-          )
-          model = legacyModelConfiguration.model
-          effort = legacyModelConfiguration.reasoningEffort
-          print("[ChatCLI] Codex is outdated; retrying card generation with \(model)")
-        }
       }
     }
 
@@ -168,13 +158,7 @@ extension CodexProvider {
   static func activityCardModelConfiguration() -> (
     model: String, reasoningEffort: String?
   ) {
-    return (model: "gpt-5.6-sol", reasoningEffort: "low")
-  }
-
-  static func legacyActivityCardModelConfiguration() -> (
-    model: String, reasoningEffort: String?
-  ) {
-    return (model: "gpt-5.4", reasoningEffort: "low")
+    return (model: "gpt-6.1-sol", reasoningEffort: "low")
   }
 
   private func codexRunResultFromStreamingError(

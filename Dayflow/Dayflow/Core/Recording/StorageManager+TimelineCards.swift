@@ -915,8 +915,8 @@ extension StorageManager {
     timeFormatter.locale = Locale(identifier: "en_US_POSIX")
 
     try? timedWrite("replaceTimelineCardsInRange(\(newCards.count)_cards)") { db in
-      // First, fetch the video paths that will be soft-deleted
-      // Note: We exclude error cards (category='System') from other batches to preserve them
+      // Only replace cards written by this batch. Overlapping cards from other
+      // batches must survive out-of-order batch completion.
       let videoRows = try Row.fetchAll(
         db,
         sql: """
@@ -925,7 +925,7 @@ extension StorageManager {
                  OR (start_ts >= ? AND start_ts < ?))
                  AND video_summary_url IS NOT NULL
                  AND is_deleted = 0
-                 AND (category != 'System' OR batch_id = ?)
+                 AND batch_id = ?
           """, arguments: [toTs, fromTs, fromTs, toTs, batchId])
 
       videoPaths = videoRows.compactMap { $0["video_summary_url"] as? String }
@@ -938,15 +938,13 @@ extension StorageManager {
               WHERE ((start_ts < ? AND end_ts > ?)
                  OR (start_ts >= ? AND start_ts < ?))
                  AND is_deleted = 0
-                 AND (category != 'System' OR batch_id = ?)
+                 AND batch_id = ?
           """, arguments: [toTs, fromTs, fromTs, toTs, batchId])
 
       for _ in cardsToDelete {
         // Cards being deleted - no-op needed, just iterating to trigger side effects
       }
 
-      // Soft delete existing cards in the range using timestamp columns
-      // Preserve error cards (category='System') from other batches so they remain visible
       try db.execute(
         sql: """
               UPDATE timeline_cards
@@ -954,7 +952,7 @@ extension StorageManager {
               WHERE ((start_ts < ? AND end_ts > ?)
                  OR (start_ts >= ? AND start_ts < ?))
                  AND is_deleted = 0
-                 AND (category != 'System' OR batch_id = ?)
+                 AND batch_id = ?
           """, arguments: [toTs, fromTs, fromTs, toTs, batchId])
 
       // Verify soft deletion (count remaining active cards)

@@ -5,7 +5,8 @@
 //  Pure policy for sliding-window card replacement (JerryZLiu/Dayflow#285).
 //  Processing-failed cards used to be preserved whenever they belonged to
 //  another batch, so overlapping failures stacked into tens of thousands of
-//  System cards. Failed cards in the replacement window are always replaced.
+//  System cards. Failed cards in the replacement window are always replaced
+//  on the failure path; successful batches only replace same-batch markers.
 //
 
 import Foundation
@@ -13,9 +14,18 @@ import Foundation
 enum TimelineReplacementPolicy {
   static let processingFailedTitle = "Processing failed"
 
+  static func isProcessingFailedTitle(_ title: String) -> Bool {
+    title.trimmingCharacters(in: .whitespacesAndNewlines) == processingFailedTitle
+  }
+
   /// SQL WHERE fragment matching `shouldSoftDeleteCard`. Bind replacingBatchId last.
-  static var replaceableCardsSQLPredicate: String {
-    "(title = '\(processingFailedTitle)' OR category != 'System' OR batch_id = ?)"
+  static func replaceableCardsSQLPredicate(
+    replaceOverlappingProcessingFailedFromOtherBatches: Bool = false
+  ) -> String {
+    if replaceOverlappingProcessingFailedFromOtherBatches {
+      return "(title = '\(processingFailedTitle)' OR category != 'System' OR batch_id = ?)"
+    }
+    return "(category != 'System' OR batch_id = ?)"
   }
 
   /// Soft-delete extra live Processing failed cards, keeping the lowest id
@@ -51,7 +61,7 @@ enum TimelineReplacementPolicy {
     var kept: [String: Int64] = [:]
     var toDelete: [Int64] = []
     let liveFailed = cards
-      .filter { !$0.isDeleted && $0.title == processingFailedTitle }
+      .filter { !$0.isDeleted && isProcessingFailedTitle($0.title) }
       .sorted { $0.id < $1.id }
     for card in liveFailed {
       let key = "\(card.day)|\(card.startTs ?? 0)|\(card.endTs ?? 0)"
@@ -69,9 +79,13 @@ enum TimelineReplacementPolicy {
     category: String,
     title: String,
     cardBatchId: Int64?,
-    replacingBatchId: Int64
+    replacingBatchId: Int64,
+    replaceOverlappingProcessingFailedFromOtherBatches: Bool = false
   ) -> Bool {
-    if title == processingFailedTitle { return true }
+    if isProcessingFailedTitle(title) {
+      if replaceOverlappingProcessingFailedFromOtherBatches { return true }
+      return cardBatchId == replacingBatchId
+    }
     if category != "System" { return true }
     return cardBatchId == replacingBatchId
   }
@@ -79,6 +93,6 @@ enum TimelineReplacementPolicy {
   /// Cards the model should see as prior context. System / processing-failed
   /// rows are storage bookkeeping, not activities.
   static func isUsableActivityContext(category: String, title: String) -> Bool {
-    category != "System" && title != processingFailedTitle
+    category != "System" && !isProcessingFailedTitle(title)
   }
 }

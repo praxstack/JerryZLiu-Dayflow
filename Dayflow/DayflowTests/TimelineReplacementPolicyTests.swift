@@ -3,18 +3,31 @@ import XCTest
 @testable import Dayflow
 
 final class TimelineReplacementPolicyTests: XCTestCase {
-  func testOverlappingProcessingFailedCardsAreAlwaysReplaced() {
+  func testOverlappingProcessingFailedCardsReplacedOnFailurePath() {
     XCTAssertTrue(
       TimelineReplacementPolicy.shouldSoftDeleteCard(
         category: "System",
         title: "Processing failed",
         cardBatchId: 1,
+        replacingBatchId: 2,
+        replaceOverlappingProcessingFailedFromOtherBatches: true))
+  }
+
+  func testOtherBatchProcessingFailedPreservedOnSuccessPath() {
+    XCTAssertFalse(
+      TimelineReplacementPolicy.shouldSoftDeleteCard(
+        category: "System",
+        title: "Processing failed",
+        cardBatchId: 1,
         replacingBatchId: 2))
+  }
+
+  func testSameBatchProcessingFailedReplacedOnSuccessPath() {
     XCTAssertTrue(
       TimelineReplacementPolicy.shouldSoftDeleteCard(
-        category: "Work",
+        category: "System",
         title: "Processing failed",
-        cardBatchId: 9,
+        cardBatchId: 2,
         replacingBatchId: 2))
   }
 
@@ -42,11 +55,20 @@ final class TimelineReplacementPolicyTests: XCTestCase {
         replacingBatchId: 2))
   }
 
-  func testSQLPredicateMatchesFailedTitleAndBatchBind() {
-    let sql = TimelineReplacementPolicy.replaceableCardsSQLPredicate
-    XCTAssertTrue(sql.contains("'\(TimelineReplacementPolicy.processingFailedTitle)'"))
-    XCTAssertTrue(sql.contains("category != 'System'"))
-    XCTAssertTrue(sql.contains("batch_id = ?"))
+  func testTrimmedProcessingFailedTitleMatches() {
+    XCTAssertTrue(TimelineReplacementPolicy.isProcessingFailedTitle("  Processing failed  "))
+  }
+
+  func testSQLPredicateMatchesFailureAndSuccessModes() {
+    let failureSQL = TimelineReplacementPolicy.replaceableCardsSQLPredicate(
+      replaceOverlappingProcessingFailedFromOtherBatches: true)
+    XCTAssertTrue(failureSQL.contains("'\(TimelineReplacementPolicy.processingFailedTitle)'"))
+    XCTAssertTrue(failureSQL.contains("category != 'System'"))
+
+    let successSQL = TimelineReplacementPolicy.replaceableCardsSQLPredicate()
+    XCTAssertFalse(successSQL.contains("Processing failed"))
+    XCTAssertTrue(successSQL.contains("category != 'System'"))
+    XCTAssertTrue(successSQL.contains("batch_id = ?"))
   }
 
   func testGenerationContextDropsFailedAndSystemCards() {

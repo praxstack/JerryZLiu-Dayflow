@@ -21,13 +21,20 @@ final class TimelineReplacementPolicyLinuxTests: XCTestCase {
       [11])
   }
 
-  func testOverlappingFailedCardsStillAlwaysReplaced() {
-    XCTAssertTrue(
+  func testOtherBatchFailedCardsOnlyReplacedOnFailurePath() {
+    XCTAssertFalse(
       TimelineReplacementPolicy.shouldSoftDeleteCard(
         category: "System",
         title: "Processing failed",
         cardBatchId: 1,
         replacingBatchId: 2))
+    XCTAssertTrue(
+      TimelineReplacementPolicy.shouldSoftDeleteCard(
+        category: "System",
+        title: "Processing failed",
+        cardBatchId: 1,
+        replacingBatchId: 2,
+        replaceOverlappingProcessingFailedFromOtherBatches: true))
   }
 
   func testCleanupSQLIsIdempotentSoftDelete() {

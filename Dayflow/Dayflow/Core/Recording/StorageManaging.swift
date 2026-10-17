@@ -37,8 +37,13 @@ protocol StorageManaging: Sendable {
   func fetchTimelineCardsByTimeRange(from: Date, to: Date) -> [TimelineCard]
   func fetchTotalMinutesTracked(from: Date, to: Date) -> Double
   func fetchTotalMinutesTrackedForWeek(containing date: Date) -> Double
-  func replaceTimelineCardsInRange(from: Date, to: Date, with: [TimelineCardShell], batchId: Int64)
-    -> (insertedIds: [Int64], deletedVideoPaths: [String])
+  func replaceTimelineCardsInRange(
+    from: Date,
+    to: Date,
+    with: [TimelineCardShell],
+    batchId: Int64,
+    replaceOverlappingProcessingFailedFromOtherBatches: Bool
+  ) -> (insertedIds: [Int64], deletedVideoPaths: [String])
   func fetchRecentTimelineCardsForDebug(limit: Int) -> [TimelineCardDebugEntry]
 
   func updateTimelineCardCategory(cardId: Int64, category: String)

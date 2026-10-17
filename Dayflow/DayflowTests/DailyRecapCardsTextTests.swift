@@ -72,6 +72,40 @@ final class DailyRecapCardsTextTests: XCTestCase {
     XCTAssertFalse(text.contains("omitted"))
   }
 
+  func testChronologicalSortNotLexicographic() {
+    let cards = [
+      card(title: "Late morning", summary: "a", start: "10:00 AM"),
+      card(title: "Early morning", summary: "b", start: "9:00 AM"),
+    ]
+    let text = DailyRecapGenerator.makeCardsText(day: "2026-03-11", cards: cards)
+    let earlyRange = text.range(of: "Early morning")!
+    let lateRange = text.range(of: "Late morning")!
+    XCTAssertLessThan(earlyRange.lowerBound, lateRange.lowerBound)
+  }
+
+  func testOutputRespectsMaxCharactersIncludingNotice() {
+    let cards = (0..<30).map { index in
+      card(
+        title: "Activity \(index) " + String(repeating: "n", count: 40),
+        summary: String(repeating: "s", count: 80),
+        start: "9:\(String(format: "%02d", index % 60)) AM")
+    }
+    let maxCharacters = 400
+    let text = DailyRecapGenerator.makeCardsText(
+      day: "2026-03-11", cards: cards, maxCharacters: maxCharacters)
+    XCTAssertLessThanOrEqual(text.count, maxCharacters)
+  }
+
+  func testMakeCardsTextDropsProcessingFailedAndCapsLength() {
+    let failed = card(title: "Processing failed", summary: String(repeating: "x", count: 2000))
+    let text = DailyRecapGenerator.makeCardsText(
+      day: "2026-03-11",
+      cards: [failed, card(title: "Ship CLI", summary: "Wrote tests")]
+    )
+    XCTAssertFalse(text.contains("Processing failed"))
+    XCTAssertTrue(text.contains("Ship CLI"))
+  }
+
   private func card(title: String, summary: String, start: String = "9:00 AM") -> TimelineCard {
     TimelineCard(
       recordId: nil,

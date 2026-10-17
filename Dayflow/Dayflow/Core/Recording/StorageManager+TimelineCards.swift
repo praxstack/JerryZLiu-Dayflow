@@ -900,8 +900,16 @@ extension StorageManager {
   }
 
   func replaceTimelineCardsInRange(
-    from: Date, to: Date, with newCards: [TimelineCardShell], batchId: Int64
+    from: Date,
+    to: Date,
+    with newCards: [TimelineCardShell],
+    batchId: Int64,
+    replaceOverlappingProcessingFailedFromOtherBatches: Bool = false
   ) -> (insertedIds: [Int64], deletedVideoPaths: [String]) {
+    let replaceablePredicate = TimelineReplacementPolicy.replaceableCardsSQLPredicate(
+      replaceOverlappingProcessingFailedFromOtherBatches:
+        replaceOverlappingProcessingFailedFromOtherBatches
+    )
     let fromTs = Int(from.timeIntervalSince1970)
     let toTs = Int(to.timeIntervalSince1970)
 
@@ -926,7 +934,7 @@ extension StorageManager {
                  OR (start_ts >= ? AND start_ts < ?))
                  AND video_summary_url IS NOT NULL
                  AND is_deleted = 0
-                 AND \(TimelineReplacementPolicy.replaceableCardsSQLPredicate)
+                 AND \(replaceablePredicate)
           """, arguments: [toTs, fromTs, fromTs, toTs, batchId])
 
       videoPaths = videoRows.compactMap { $0["video_summary_url"] as? String }
@@ -939,7 +947,7 @@ extension StorageManager {
               WHERE ((start_ts < ? AND end_ts > ?)
                  OR (start_ts >= ? AND start_ts < ?))
                  AND is_deleted = 0
-                 AND \(TimelineReplacementPolicy.replaceableCardsSQLPredicate)
+                 AND \(replaceablePredicate)
           """, arguments: [toTs, fromTs, fromTs, toTs, batchId])
 
       for _ in cardsToDelete {
@@ -957,7 +965,7 @@ extension StorageManager {
               WHERE ((start_ts < ? AND end_ts > ?)
                  OR (start_ts >= ? AND start_ts < ?))
                  AND is_deleted = 0
-                 AND \(TimelineReplacementPolicy.replaceableCardsSQLPredicate)
+                 AND \(replaceablePredicate)
           """, arguments: [toTs, fromTs, fromTs, toTs, batchId])
 
       // Verify soft deletion (count remaining active cards)

@@ -325,18 +325,25 @@ final class DailyRecapGenerator {
         entryLines.append("   \(summary)")
       }
 
-      var entryLength = entryLines.reduce(0) { $0 + $1.count + 1 }
+      func entryCharacterCount(_ lines: [String]) -> Int {
+        lines.reduce(0) { $0 + $1.count + 1 }
+      }
+
+      var entryLength = entryCharacterCount(entryLines)
       if entryLength > remaining {
         if remaining <= 0 { break }
-        if entryLines.count > 1, entryLines[1].count + 1 > remaining {
-          let prefixBudget = max(0, remaining - 1)
-          if prefixBudget > 0 {
-            entryLines[1] = String(entryLines[1].prefix(prefixBudget))
-            entryLength = entryLines.reduce(0) { $0 + $1.count + 1 }
-          } else {
+        if entryLines.count > 1 {
+          let titleLineCost = entryLines[0].count + 1
+          let summaryBudget = max(0, remaining - titleLineCost)
+          if summaryBudget <= 0 {
             break
           }
-        } else if entryLength > remaining {
+          if entryLines[1].count + 1 > summaryBudget {
+            entryLines[1] = String(entryLines[1].prefix(summaryBudget))
+            entryLength = entryCharacterCount(entryLines)
+          }
+        }
+        if entryLength > remaining {
           break
         }
       }

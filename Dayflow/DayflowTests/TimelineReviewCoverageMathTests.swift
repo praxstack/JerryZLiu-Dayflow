@@ -6,9 +6,9 @@ final class TimelineReviewCoverageMathTests: XCTestCase {
   func testEffectiveDurationClipsToDayWindow() {
     let dayStart = 1_700_000_000
     let dayEnd = dayStart + 24 * 60 * 60
-    // Card spans 55 minutes but only 8 minutes fall inside the day window.
-    let cardStart = dayEnd - (55 * 60)
-    let cardEnd = dayEnd + (3 * 60)
+    // Card extends 47 minutes past the day boundary; only the last 8 minutes are in-window.
+    let cardStart = dayEnd - (8 * 60)
+    let cardEnd = dayEnd + (47 * 60)
 
     let effective = TimelineReviewCoverageMath.effectiveDuration(
       cardStart: cardStart,
@@ -22,8 +22,8 @@ final class TimelineReviewCoverageMathTests: XCTestCase {
   func testFullyRatedInDayWindowReachesFullCoverage() {
     let dayStart = 1_700_000_000
     let dayEnd = dayStart + 24 * 60 * 60
-    let cardStart = dayEnd - (55 * 60)
-    let cardEnd = dayEnd + (3 * 60)
+    let cardStart = dayEnd - (8 * 60)
+    let cardEnd = dayEnd + (47 * 60)
     let reviewStart = max(cardStart, dayStart)
     let reviewEnd = min(cardEnd, dayEnd)
     let duration = TimelineReviewCoverageMath.effectiveDuration(

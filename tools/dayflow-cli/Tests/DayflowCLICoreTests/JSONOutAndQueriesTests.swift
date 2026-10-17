@@ -84,9 +84,13 @@ final class QueriesTests: XCTestCase {
     XCTAssertEqual(all[0].apps, ["Cursor", "Terminal"])
     XCTAssertEqual(all[1].distractionCount, 1)
 
-    let window = dayWindow(containing: all[0].start)
+    guard let window = dayWindow(forKey: "2026-03-11") else {
+      XCTFail("expected day window for fixture date")
+      return
+    }
     let dayCards = try fetchActivities(db: db, window: window)
-    XCTAssertTrue(dayCards.contains(where: { $0.recordId == all[0].recordId }))
+    XCTAssertEqual(Set(dayCards.map(\.recordId)), Set(all.map(\.recordId)))
+    XCTAssertEqual(dayCards.count, 2)
   }
 
   func testSearchAndSingleCard() throws {

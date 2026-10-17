@@ -4,6 +4,11 @@ from __future__ import annotations
 
 import json
 import os
+import time
+
+os.environ["TZ"] = "UTC"
+if hasattr(time, "tzset"):
+    time.tzset()
 import select
 import socket
 import subprocess

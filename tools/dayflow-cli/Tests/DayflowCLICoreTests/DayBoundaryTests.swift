@@ -3,8 +3,14 @@ import XCTest
 import DayflowCLICore
 
 final class DayBoundaryTests: XCTestCase {
+  private var utcCalendar: Calendar {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(identifier: "UTC")!
+    return calendar
+  }
+
   func testBeforeFourAMBelongsToPreviousDay() {
-    let calendar = Calendar.current
+    let calendar = utcCalendar
     let date = makeDate(calendar: calendar, year: 2026, month: 3, day: 11, hour: 3, minute: 30)
     let window = dayWindow(containing: date)
     XCTAssertEqual(window.dayKey, expectedKey(calendar: calendar, year: 2026, month: 3, day: 10))
@@ -14,7 +20,7 @@ final class DayBoundaryTests: XCTestCase {
   }
 
   func testFourAMStartsNamedDay() {
-    let calendar = Calendar.current
+    let calendar = utcCalendar
     let date = makeDate(calendar: calendar, year: 2026, month: 3, day: 11, hour: 4, minute: 0)
     let window = dayWindow(containing: date)
     XCTAssertEqual(window.dayKey, expectedKey(calendar: calendar, year: 2026, month: 3, day: 11))
@@ -32,9 +38,26 @@ final class DayBoundaryTests: XCTestCase {
       return
     }
     XCTAssertEqual(window.dayKey, "2026-03-11")
-    XCTAssertEqual(Calendar.current.component(.hour, from: window.start), 4)
+    XCTAssertEqual(utcCalendar.component(.hour, from: window.start), 4)
     let hours = window.end.timeIntervalSince(window.start) / 3600
     XCTAssertEqual(hours, 24, accuracy: 0.01)
+  }
+
+  func testWeekWindowMondayBeforeFourAMUsesPriorWeek() {
+    let calendar = utcCalendar
+    let date = makeDate(calendar: calendar, year: 2026, month: 3, day: 9, hour: 3, minute: 30)
+    let window = weekWindow(containing: date)
+    let expectedStart = makeDate(calendar: calendar, year: 2026, month: 3, day: 2, hour: 4, minute: 0)
+    XCTAssertEqual(window.start, expectedStart)
+    XCTAssertEqual(window.end, makeDate(calendar: calendar, year: 2026, month: 3, day: 9, hour: 4, minute: 0))
+  }
+
+  func testWeekWindowAfterMondayFourAMStartsCurrentWeek() {
+    let calendar = utcCalendar
+    let date = makeDate(calendar: calendar, year: 2026, month: 3, day: 9, hour: 4, minute: 30)
+    let window = weekWindow(containing: date)
+    let expectedStart = makeDate(calendar: calendar, year: 2026, month: 3, day: 9, hour: 4, minute: 0)
+    XCTAssertEqual(window.start, expectedStart)
   }
 
   func testFormatDuration() {

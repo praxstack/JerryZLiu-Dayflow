@@ -99,6 +99,9 @@ public final class FlowSessionMirrorCore {
     case (_, .idle), (_, .ended):
       state.isDistracted = false
       state.snoozed = false
+      if case (_, .idle) = (previous, newSnapshot.phase), !state.overlay.isDemo {
+        state.overlay = .hidden
+      }
     default:
       break
     }
@@ -132,6 +135,13 @@ public final class FlowSessionMirrorCore {
       return
     }
     state.overlay = .toast(message: message)
+  }
+
+  public func agentCompletedGoals(_ goals: [FlowGoalTask]) {
+    guard !goals.isEmpty else { return }
+    webBridge?.sendEvent(
+      "goalsCompleted",
+      payload: ["goals": goals.map { ["id": $0.id, "title": $0.title] }])
   }
 
   public func respondBackToWork() {

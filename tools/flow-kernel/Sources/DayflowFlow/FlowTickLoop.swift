@@ -272,6 +272,7 @@ public final class FlowTickLoop {
   public private(set) var lastReportedOffTask = false
   public private(set) var consecutiveFailures = 0
   public private(set) var snoozeUntil: Date?
+  private var reportedGoalIds: Set<String> = []
 
   public init(
     clock: FlowClock,
@@ -298,6 +299,7 @@ public final class FlowTickLoop {
     lastReportedOffTask = false
     consecutiveFailures = 0
     snoozeUntil = nil
+    reportedGoalIds = []
     armTick()
     armDeadline()
   }
@@ -387,6 +389,20 @@ public final class FlowTickLoop {
       lastReportedOffTask = result.parsed.isOffTask
       mirror.agentReportedFocusChange(isDistracted: result.parsed.isOffTask)
     }
+
+    let goalTasks = mirror.snapshot.goalTasks ?? []
+    let finished = result.parsed.completedGoals.compactMap { short -> FlowGoalTask? in
+      let digits = short.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "g[] "))
+      guard let index = Int(digits), index >= 1, index <= goalTasks.count else { return nil }
+      let task = goalTasks[index - 1]
+      guard !reportedGoalIds.contains(task.id) else { return nil }
+      return task
+    }
+    if !finished.isEmpty {
+      reportedGoalIds.formUnion(finished.map(\.id))
+      mirror.agentCompletedGoals(finished)
+    }
+
     switch result.parsed.overlay {
     case .none:
       break

@@ -16,6 +16,12 @@ final class FlowVerdictInterpreterTests: XCTestCase {
     XCTAssertEqual(parsed.message, "Slack")
   }
 
+  func testDistractedStatusCountsAsOffTask() {
+    let parsed = FlowVerdictInterpreter.parseDetails(#"{"status":"distracted","message":"Slack"}"#)
+    XCTAssertTrue(parsed.isOffTask)
+    XCTAssertEqual(parsed.decision, .offTask(message: "Slack"))
+  }
+
   func testNudgeAction() {
     XCTAssertEqual(
       FlowVerdictInterpreter.parse(#"{"action":"nudge","message":"Back to PR"}"#),

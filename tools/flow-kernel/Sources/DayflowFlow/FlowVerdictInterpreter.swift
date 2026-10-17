@@ -48,10 +48,13 @@ public struct FlowParsedVerdict: Equatable {
 public enum FlowVerdictInterpreter {
   public struct Verdict: Decodable, Equatable {
     public var status: String?
+    public var seeing: String?
     public var action: String?
     public var message: String?
     public var reason: String?
     public var completed_goals: [String]?
+
+    public var isOffTask: Bool { status == "off_task" || status == "distracted" }
   }
 
   /// Every top-level `{...}` in the reply, in order, tolerating fences and
@@ -117,7 +120,7 @@ public enum FlowVerdictInterpreter {
   }
 
   public static func interpret(_ verdict: Verdict) -> FlowParsedVerdict {
-    let isOffTask = verdict.status == "off_task"
+    let isOffTask = verdict.isOffTask
     let overlay: FlowOverlayAction
     switch verdict.action {
     case "nudge":

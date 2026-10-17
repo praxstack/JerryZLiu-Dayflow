@@ -64,6 +64,25 @@ final class FlowTickLoopTests: XCTestCase {
     }
   }
 
+  func testCompletedGoalsRelayOnceEach() {
+    let (_, _, loop) = makeLoop()
+    var snapshot = activeSnapshot()
+    snapshot.goalTasks = [
+      FlowGoalTask(id: "goal-a", title: "Ship kernel"),
+      FlowGoalTask(id: "goal-b", title: "Write tests"),
+    ]
+    let bridge = MockFlowBridge()
+    loop.mirror.webBridge = bridge
+    loop.start(with: snapshot)
+    XCTAssertEqual(loop.beginTick(), .begin)
+    _ = loop.finishTick(
+      reply: #"{"status":"on_task","completed_goals":["g1","g2","g1"]}"#)
+    XCTAssertEqual(bridge.eventNames.filter { $0 == "goalsCompleted" }.count, 1)
+    let payload = bridge.events.last(where: { $0.event == "goalsCompleted" })?.payload
+    let goals = payload?["goals"] as? [[String: String]]
+    XCTAssertEqual(goals?.count, 2)
+  }
+
   func testOffTaskNudgeThenOnTaskClosesIncident() {
     let (_, _, loop) = makeLoop()
     loop.start(with: activeSnapshot())
@@ -83,6 +102,21 @@ final class FlowTickLoopTests: XCTestCase {
   }
 
   // MARK: Fail-safe
+
+  func testEmptyObjectClosesOffTaskIncident() {
+    let (_, _, loop) = makeLoop()
+    loop.start(with: activeSnapshot())
+    XCTAssertEqual(loop.beginTick(), .begin)
+    _ = loop.finishTick(
+      reply: #"{"status":"off_task","action":"nudge","message":"Slack"}"#)
+    XCTAssertTrue(loop.mirror.isDistracted)
+
+    XCTAssertEqual(loop.beginTick(), .begin)
+    let back = loop.finishTick(reply: "{}")
+    XCTAssertEqual(back.kind, .applied)
+    XCTAssertTrue(back.didFlipFocus)
+    XCTAssertFalse(loop.mirror.isDistracted)
+  }
 
   func testUnparseableReplyDoesNotCloseOffTaskIncident() {
     let (_, _, loop) = makeLoop()

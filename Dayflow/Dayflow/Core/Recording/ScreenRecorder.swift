@@ -142,6 +142,9 @@ final class ScreenRecorder: NSObject, @unchecked Sendable {
 
   private let q = DispatchQueue(label: "com.dayflow.recorder", qos: .userInitiated)
   private var captureTimer: DispatchSourceTimer?
+  /// Fires at the user's base cadence while the capture timer is throttled so
+  /// returning activity can rebuild the timer without waiting for the long idle tick.
+  private var idleCadenceWatchTimer: DispatchSourceTimer?
   /// Last interval the repeating timer was scheduled with. Compared against
   /// `IdleCaptureThrottle` each tick so idle/active transitions rebuild it.
   private var currentCaptureInterval: TimeInterval?
@@ -452,6 +455,7 @@ final class ScreenRecorder: NSObject, @unchecked Sendable {
     }
     timer.resume()
     captureTimer = timer
+    syncIdleCadenceWatchTimer(throttledInterval: resolvedInterval)
 
     dbg("Capture timer started (interval: \(resolvedInterval)s)")
   }
@@ -459,7 +463,39 @@ final class ScreenRecorder: NSObject, @unchecked Sendable {
   private func stopCaptureTimer() {
     captureTimer?.cancel()
     captureTimer = nil
+    stopIdleCadenceWatchTimer()
     currentCaptureInterval = nil
+  }
+
+  private func syncIdleCadenceWatchTimer(throttledInterval: TimeInterval) {
+    let base = ScreenshotConfig.interval
+    guard IdleCapturePreferences.enabled, throttledInterval > base else {
+      stopIdleCadenceWatchTimer()
+      return
+    }
+    stopIdleCadenceWatchTimer()
+    let watch = DispatchSource.makeTimerSource(queue: q)
+    watch.schedule(deadline: .now() + base, repeating: base)
+    watch.setEventHandler { [weak self] in
+      guard let self else { return }
+      guard self.state == .capturing else { return }
+      guard let idleSeconds = InputIdleSnapshot.currentIdleSeconds(),
+        TimeInterval(idleSeconds) < IdleCaptureDefaults.idleThresholdSeconds,
+        let current = self.currentCaptureInterval,
+        current > base
+      else { return }
+      self.dbg(
+        "Capture cadence accelerating: \(current)s → \(base)s (user active again)"
+      )
+      self.startCaptureTimer(interval: base)
+    }
+    watch.resume()
+    idleCadenceWatchTimer = watch
+  }
+
+  private func stopIdleCadenceWatchTimer() {
+    idleCadenceWatchTimer?.cancel()
+    idleCadenceWatchTimer = nil
   }
 
   // MARK: - Capture Tick & Backoff
@@ -579,7 +615,9 @@ final class ScreenRecorder: NSObject, @unchecked Sendable {
       )
       await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
         q.async { [weak self] in
-          self?.startCaptureTimer(interval: rescheduleTo)
+          if let self, self.state == .capturing {
+            self.startCaptureTimer(interval: rescheduleTo)
+          }
           continuation.resume()
         }
       }

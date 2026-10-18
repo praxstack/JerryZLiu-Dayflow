@@ -24,7 +24,7 @@ final class IdleCaptureThrottleTests: XCTestCase {
       baseInterval: 10,
       idleSeconds: 120
     )
-    XCTAssertEqual(interval, 30)
+    XCTAssertEqual(interval, IdleCaptureDefaults.throttledIntervalSeconds)
   }
 
   func testLongIdleStaysAtThrottledInterval() {
@@ -32,7 +32,7 @@ final class IdleCaptureThrottleTests: XCTestCase {
       baseInterval: 10,
       idleSeconds: 3600
     )
-    XCTAssertEqual(interval, 30)
+    XCTAssertEqual(interval, IdleCaptureDefaults.throttledIntervalSeconds)
   }
 
   func testNilIdleSecondsGetsBaseInterval() {
@@ -73,7 +73,7 @@ final class IdleCaptureShouldCaptureTests: XCTestCase {
   func testSkipsWhenTimeSinceLastCaptureIsBelowInterval() {
     XCTAssertFalse(
       IdleCaptureThrottle.shouldCapture(
-        now: t0.addingTimeInterval(9.999),
+        now: t0.addingTimeInterval(10 - IdleCaptureThrottle.captureGateJitterSeconds - 0.25),
         lastCapture: t0,
         interval: 10
       )
@@ -100,6 +100,17 @@ final class IdleCaptureShouldCaptureTests: XCTestCase {
     )
   }
 
+  func testGateFiresWhenWallClockMovesBackward() {
+    let last = t0.addingTimeInterval(100)
+    XCTAssertTrue(
+      IdleCaptureThrottle.shouldCapture(
+        now: t0,
+        lastCapture: last,
+        interval: 10
+      )
+    )
+  }
+
   func testFiresWhenTimeSinceLastCaptureExceedsInterval() {
     XCTAssertTrue(
       IdleCaptureThrottle.shouldCapture(
@@ -119,9 +130,10 @@ final class IdleCaptureRescheduleTests: XCTestCase {
   }
 
   func testReschedulesWhenCrossingIdleThreshold() {
+    let throttled = IdleCaptureDefaults.throttledIntervalSeconds
     XCTAssertEqual(
-      IdleCaptureThrottle.rescheduleInterval(current: 10, target: 30),
-      30
+      IdleCaptureThrottle.rescheduleInterval(current: 10, target: throttled),
+      throttled
     )
   }
 
@@ -159,12 +171,12 @@ final class IdleCaptureDecisionTests: XCTestCase {
       baseInterval: 10,
       scheduledInterval: 10
     )
-    XCTAssertEqual(crossing.interval, 30)
+    XCTAssertEqual(crossing.interval, IdleCaptureDefaults.throttledIntervalSeconds)
     XCTAssertTrue(
       crossing.shouldCapture,
-      "the threshold-crossing tick must still capture so the idle gap stays <= 30s"
+      "the threshold-crossing tick must still capture so the idle gap stays within classifier limits"
     )
-    XCTAssertEqual(crossing.rescheduleTo, 30)
+    XCTAssertEqual(crossing.rescheduleTo, IdleCaptureDefaults.throttledIntervalSeconds)
 
     let earlyIdleTick = IdleCaptureThrottle.decide(
       now: t0.addingTimeInterval(10),
@@ -172,9 +184,9 @@ final class IdleCaptureDecisionTests: XCTestCase {
       idleSeconds: 130,
       enabled: true,
       baseInterval: 10,
-      scheduledInterval: 30
+      scheduledInterval: IdleCaptureDefaults.throttledIntervalSeconds
     )
-    XCTAssertEqual(earlyIdleTick.interval, 30)
+    XCTAssertEqual(earlyIdleTick.interval, IdleCaptureDefaults.throttledIntervalSeconds)
     XCTAssertFalse(earlyIdleTick.shouldCapture)
     XCTAssertNil(earlyIdleTick.rescheduleTo)
   }

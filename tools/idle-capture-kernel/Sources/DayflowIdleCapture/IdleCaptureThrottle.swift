@@ -7,12 +7,13 @@ import Foundation
 /// since the last *input event*, not time since the last screenshot — so a
 /// brief activity blip mid-idle-stretch resets that clock to near-zero for
 /// the next screenshot, leaving up to `(throttledIntervalSeconds - 1)` seconds
-/// of the previous inter-screenshot gap uncovered. At 30s that worst case is
-/// 29s, just inside the 30s limit; anything higher can silently kick the batch
-/// out of idle classification and force a full LLM pass.
+/// of the previous inter-screenshot gap uncovered. The throttled cadence sits
+/// below the 30s classifier limit so late timer firings still leave headroom.
 public enum IdleCaptureDefaults {
   public static let idleThresholdSeconds: TimeInterval = 120
-  public static let throttledIntervalSeconds: TimeInterval = 30
+  /// Slightly under the classifier gap limit so dispatch timer latency cannot
+  /// push uncovered gaps past `maxAllowedUncoveredGapSeconds`.
+  public static let throttledIntervalSeconds: TimeInterval = 28
   /// Must stay in lockstep with `IdleBatchRules.maxAllowedUncoveredGapSeconds`.
   public static let maxAllowedUncoveredGapSeconds = 30
 }
@@ -86,6 +87,10 @@ public enum IdleCaptureThrottle {
   ) -> Bool {
     guard let lastCapture else { return true }
     let elapsed = now.timeIntervalSince(lastCapture)
+    if elapsed < 0 {
+      // Wall-clock correction must not stall capture until time catches up.
+      return true
+    }
     return elapsed + captureGateJitterSeconds >= interval
   }
 

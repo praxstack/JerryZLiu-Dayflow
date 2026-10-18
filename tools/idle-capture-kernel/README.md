@@ -8,9 +8,9 @@ less often during long inactivity) without ScreenCaptureKit.
 
 Source of truth under `Sources/DayflowIdleCapture/IdleCaptureThrottle.swift`:
 
-- `IdleCaptureDefaults` — 2 minute idle threshold, 30s throttled cadence
-  (capped so IdleBatchClassifier's 30s uncovered-gap limit still holds)
-- `IdleCapturePreferences` — on/off `UserDefaults` key, default enabled
+- `IdleCaptureDefaults` — 2 minute idle threshold, 28s throttled cadence
+  (headroom under IdleBatchClassifier's 30s uncovered-gap limit)
+- `IdleCapturePreferences` — on/off `UserDefaults` key, default disabled (opt-in)
 - `IdleCaptureThrottle.interval` — idle heuristics (nil idle never throttles;
   never speeds up a slower user-chosen base interval)
 - `IdleCaptureThrottle.shouldCapture` — time-since-last-capture gate

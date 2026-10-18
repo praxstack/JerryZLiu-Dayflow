@@ -6,10 +6,10 @@ import XCTest
 /// policy suite lives in `tools/idle-capture-kernel` and is what Linux CI runs.
 final class IdleCaptureThrottleAppTests: XCTestCase {
   func testKernelTypesAreLinkedIntoTheAppModule() {
-    XCTAssertEqual(IdleCaptureDefaults.throttledIntervalSeconds, 30)
+    XCTAssertEqual(IdleCaptureDefaults.throttledIntervalSeconds, 28)
     XCTAssertEqual(
       IdleCaptureThrottle.interval(baseInterval: 10, idleSeconds: 120),
-      30
+      IdleCaptureDefaults.throttledIntervalSeconds
     )
     XCTAssertTrue(
       IdleCaptureThrottle.shouldCapture(

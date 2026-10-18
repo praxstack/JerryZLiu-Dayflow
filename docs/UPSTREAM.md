@@ -27,8 +27,13 @@ git merge upstream/main
 # open a PR into main — do not push to main directly
 ```
 
-## Status recorded for this change
+## Status snapshot
 
-- `origin/main` at `d8408525` includes `upstream/main` at `a45c7be1`
-  (v2.6.0) plus PraxStack environment/docs commits.
+Frozen SHAs go stale quickly; `scripts/check-upstream-sync.sh` is the source of
+truth after `git fetch origin` and `git fetch upstream`.
+
+As of 2026-10-18 (when this branch was last updated):
+
+- `origin/main` at `a98c049` includes `upstream/main` at `e90d25d` (v2.7.1
+  appcast) plus PraxStack commits.
 - There were **no** unmerged upstream/main commits when this branch was cut.

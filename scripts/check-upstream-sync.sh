@@ -32,5 +32,5 @@ fi
 
 echo "FAIL: origin/main is behind upstream/main" >&2
 echo "Missing commits:" >&2
-git log --oneline "$origin_sha".."$upstream_sha" | head -20 >&2
+git log --oneline --max-count=20 "$origin_sha".."$upstream_sha" >&2
 exit 1

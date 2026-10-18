@@ -608,17 +608,12 @@ struct TimelineReviewOverlay: View {
     return TimelineReviewSummary(durationByRating: durationByRating)
   }
 
-  private struct CoverageSegment {
-    var start: Int
-    var end: Int
-  }
-
   nonisolated private static func filterUnreviewedActivities(
     activities: [TimelineActivity], ratingSegments: [TimelineReviewRatingSegment], dayStartTs: Int,
     dayEndTs: Int
   ) -> [TimelineActivity] {
     guard ratingSegments.isEmpty == false else { return activities }
-    let mergedSegments = mergedCoverageSegments(
+    let mergedSegments = TimelineReviewCoverageMath.mergeCoverageSegments(
       segments: ratingSegments, dayStartTs: dayStartTs, dayEndTs: dayEndTs)
     guard mergedSegments.isEmpty == false else { return activities }
 
@@ -628,6 +623,10 @@ struct TimelineReviewOverlay: View {
     for activity in activities {
       let start = Int(activity.startTime.timeIntervalSince1970)
       let end = Int(activity.endTime.timeIntervalSince1970)
+      if end <= start {
+        unreviewed.append(activity)
+        continue
+      }
       let reviewStart = max(start, dayStartTs)
       let reviewEnd = min(end, dayEndTs)
       let duration = TimelineReviewCoverageMath.effectiveDuration(
@@ -637,7 +636,7 @@ struct TimelineReviewOverlay: View {
         dayEndTs: dayEndTs
       )
       if duration <= 0 { continue }
-      let covered = overlapSeconds(
+      let covered = TimelineReviewCoverageMath.overlapSeconds(
         start: reviewStart, end: reviewEnd, segments: mergedSegments, segmentIndex: &segmentIndex)
       let coverageRatio = Double(covered) / Double(duration)
       if coverageRatio < 0.8 {
@@ -645,58 +644,6 @@ struct TimelineReviewOverlay: View {
       }
     }
     return unreviewed
-  }
-
-  nonisolated private static func mergedCoverageSegments(
-    segments: [TimelineReviewRatingSegment], dayStartTs: Int, dayEndTs: Int
-  ) -> [CoverageSegment] {
-    var clipped: [CoverageSegment] = []
-    clipped.reserveCapacity(segments.count)
-
-    for segment in segments {
-      let start = max(segment.startTs, dayStartTs)
-      let end = min(segment.endTs, dayEndTs)
-      if end > start { clipped.append(CoverageSegment(start: start, end: end)) }
-    }
-
-    guard clipped.isEmpty == false else { return [] }
-    clipped.sort { $0.start < $1.start }
-
-    var merged: [CoverageSegment] = [clipped[0]]
-    for segment in clipped.dropFirst() {
-      var last = merged[merged.count - 1]
-      if segment.start <= last.end {
-        last.end = max(last.end, segment.end)
-        merged[merged.count - 1] = last
-      } else {
-        merged.append(segment)
-      }
-    }
-    return merged
-  }
-
-  nonisolated private static func overlapSeconds(
-    start: Int, end: Int, segments: [CoverageSegment], segmentIndex: inout Int
-  ) -> Int {
-    guard end > start else { return 0 }
-    while segmentIndex < segments.count, segments[segmentIndex].end <= start {
-      segmentIndex += 1
-    }
-    var covered = 0
-    var index = segmentIndex
-    while index < segments.count, segments[index].start < end {
-      let overlapStart = max(start, segments[index].start)
-      let overlapEnd = min(end, segments[index].end)
-      if overlapEnd > overlapStart {
-        covered += overlapEnd - overlapStart
-      }
-      if segments[index].end <= end {
-        index += 1
-      } else {
-        break
-      }
-    }
-    return covered
   }
 }
 

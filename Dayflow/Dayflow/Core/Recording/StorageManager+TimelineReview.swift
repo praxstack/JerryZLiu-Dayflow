@@ -3,6 +3,8 @@ import GRDB
 import Sentry
 
 enum TimelineReviewCoverageMath {
+  typealias CoverageInterval = (start: Int, end: Int)
+
   /// Seconds of a card that fall inside a Dayflow day window (4 AM boundary).
   static func effectiveDuration(
     cardStart: Int, cardEnd: Int, dayStartTs: Int, dayEndTs: Int
@@ -10,6 +12,69 @@ enum TimelineReviewCoverageMath {
     let start = max(cardStart, dayStartTs)
     let end = min(cardEnd, dayEndTs)
     return max(end - start, 0)
+  }
+
+  static func mergeCoverageSegments(
+    segments: [TimelineReviewRatingSegment],
+    dayStartTs: Int,
+    dayEndTs: Int
+  ) -> [CoverageInterval] {
+    var clipped: [CoverageInterval] = []
+    clipped.reserveCapacity(segments.count)
+
+    for segment in segments {
+      let start = max(segment.startTs, dayStartTs)
+      let end = min(segment.endTs, dayEndTs)
+      if end > start {
+        clipped.append((start: start, end: end))
+      }
+    }
+
+    guard clipped.isEmpty == false else { return [] }
+    clipped.sort { $0.start < $1.start }
+
+    var merged: [CoverageInterval] = [clipped[0]]
+    for segment in clipped.dropFirst() {
+      var last = merged[merged.count - 1]
+      if segment.start <= last.end {
+        last.end = max(last.end, segment.end)
+        merged[merged.count - 1] = last
+      } else {
+        merged.append(segment)
+      }
+    }
+    return merged
+  }
+
+  static func overlapSeconds(
+    start: Int,
+    end: Int,
+    segments: [CoverageInterval],
+    segmentIndex: inout Int
+  ) -> Int {
+    guard end > start else { return 0 }
+
+    while segmentIndex < segments.count, segments[segmentIndex].end <= start {
+      segmentIndex += 1
+    }
+
+    var covered = 0
+    var index = segmentIndex
+
+    while index < segments.count, segments[index].start < end {
+      let overlapStart = max(start, segments[index].start)
+      let overlapEnd = min(end, segments[index].end)
+      if overlapEnd > overlapStart {
+        covered += overlapEnd - overlapStart
+      }
+      if segments[index].end <= end {
+        index += 1
+      } else {
+        break
+      }
+    }
+
+    return covered
   }
 }
 
@@ -190,7 +255,7 @@ extension StorageManager {
     }
 
     let ratingSegments = fetchReviewRatingSegments(overlapping: dayStartTs, endTs: dayEndTs)
-    let mergedSegments = mergeCoverageSegments(
+    let mergedSegments = TimelineReviewCoverageMath.mergeCoverageSegments(
       segments: ratingSegments,
       dayStartTs: dayStartTs,
       dayEndTs: dayEndTs
@@ -210,7 +275,7 @@ extension StorageManager {
 
       let reviewStart = max(card.start, dayStartTs)
       let reviewEnd = min(card.end, dayEndTs)
-      let covered = overlapSeconds(
+      let covered = TimelineReviewCoverageMath.overlapSeconds(
         start: reviewStart,
         end: reviewEnd,
         segments: mergedSegments,
@@ -223,69 +288,6 @@ extension StorageManager {
     }
 
     return unreviewedCount
-  }
-
-  func mergeCoverageSegments(
-    segments: [TimelineReviewRatingSegment],
-    dayStartTs: Int,
-    dayEndTs: Int
-  ) -> [(start: Int, end: Int)] {
-    var clipped: [(start: Int, end: Int)] = []
-    clipped.reserveCapacity(segments.count)
-
-    for segment in segments {
-      let start = max(segment.startTs, dayStartTs)
-      let end = min(segment.endTs, dayEndTs)
-      if end > start {
-        clipped.append((start: start, end: end))
-      }
-    }
-
-    guard clipped.isEmpty == false else { return [] }
-    clipped.sort { $0.start < $1.start }
-
-    var merged: [(start: Int, end: Int)] = [clipped[0]]
-    for segment in clipped.dropFirst() {
-      var last = merged[merged.count - 1]
-      if segment.start <= last.end {
-        last.end = max(last.end, segment.end)
-        merged[merged.count - 1] = last
-      } else {
-        merged.append(segment)
-      }
-    }
-    return merged
-  }
-
-  func overlapSeconds(
-    start: Int,
-    end: Int,
-    segments: [(start: Int, end: Int)],
-    segmentIndex: inout Int
-  ) -> Int {
-    guard end > start else { return 0 }
-
-    while segmentIndex < segments.count, segments[segmentIndex].end <= start {
-      segmentIndex += 1
-    }
-
-    var covered = 0
-    var index = segmentIndex
-
-    while index < segments.count, segments[index].start < end {
-      let overlapStart = max(start, segments[index].start)
-      let overlapEnd = min(end, segments[index].end)
-      if overlapEnd > overlapStart {
-        covered += overlapEnd - overlapStart
-      }
-      if segments[index].end <= end {
-        index += 1
-      } else {
-        break
-      }
-    }
-
-    return covered
   }
 
 }

@@ -56,6 +56,57 @@ final class DayflowCalendarTests: XCTestCase {
     XCTAssertEqual(window.start, mondayFour)
   }
 
+  func testSpringDSTBeforeFourAMUsesPreviousDay() {
+    let calendar = losAngelesCalendar()
+    let date = makeDate(calendar: calendar, year: 2026, month: 3, day: 8, hour: 3, minute: 30)
+    let window = DayflowCalendar.dayWindow(containing: date, calendar: calendar)
+    XCTAssertEqual(window.dayKey, "2026-03-07")
+    XCTAssertEqual(calendar.component(.hour, from: window.start), 4)
+  }
+
+  func testSpringDSTAtFourAMStartsNamedDay() {
+    let calendar = losAngelesCalendar()
+    let date = makeDate(calendar: calendar, year: 2026, month: 3, day: 8, hour: 4, minute: 0)
+    let window = DayflowCalendar.dayWindow(containing: date, calendar: calendar)
+    XCTAssertEqual(window.dayKey, "2026-03-08")
+    XCTAssertEqual(window.start, date)
+  }
+
+  func testFallDSTBeforeFourAMUsesPreviousDay() {
+    let calendar = losAngelesCalendar()
+    let date = makeDate(calendar: calendar, year: 2026, month: 11, day: 1, hour: 1, minute: 30)
+    let window = DayflowCalendar.dayWindow(containing: date, calendar: calendar)
+    XCTAssertEqual(window.dayKey, "2026-10-31")
+    XCTAssertEqual(calendar.component(.hour, from: window.start), 4)
+  }
+
+  func testFallDSTAtFourAMStartsNamedDay() {
+    let calendar = losAngelesCalendar()
+    let date = makeDate(calendar: calendar, year: 2026, month: 11, day: 1, hour: 4, minute: 0)
+    let window = DayflowCalendar.dayWindow(containing: date, calendar: calendar)
+    XCTAssertEqual(window.dayKey, "2026-11-01")
+    XCTAssertEqual(window.start, date)
+  }
+
+  func testWeekSpanningSpringDSTEndsNextMondayFourAM() {
+    let calendar = DayflowCalendar.mondayGregorian(timeZone: losAngeles)
+    let wednesday = makeDate(calendar: calendar, year: 2026, month: 3, day: 11, hour: 12, minute: 0)
+    let window = DayflowCalendar.weekWindow(containing: wednesday, calendar: calendar)
+    let expectedEnd = makeDate(calendar: calendar, year: 2026, month: 3, day: 16, hour: 4, minute: 0)
+    XCTAssertEqual(window.end, expectedEnd)
+    XCTAssertEqual(calendar.component(.hour, from: window.start), 4)
+  }
+
+  func testExplicitDayKeyUsesGregorianYearUnderBuddhistLocale() {
+    var calendar = Calendar(identifier: .buddhist)
+    calendar.timeZone = losAngeles
+    calendar.locale = Locale(identifier: "th_TH")
+    let window = DayflowCalendar.dayWindow(forKey: "2026-03-11", calendar: calendar)
+    let start = makeDate(calendar: losAngelesCalendar(), year: 2026, month: 3, day: 11, hour: 4, minute: 0)
+    XCTAssertEqual(window?.dayKey, "2026-03-11")
+    XCTAssertEqual(window?.start, start)
+  }
+
   func testMissingCategoryPreferencesUseDefaults() {
     let categories = DayflowCategories.load(from: nil)
     XCTAssertEqual(categories.map(\.name), ["Work", "Personal", "Distraction", "Idle"])

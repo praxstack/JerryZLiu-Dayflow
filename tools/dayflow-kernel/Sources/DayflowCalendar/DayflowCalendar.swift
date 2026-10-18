@@ -45,9 +45,11 @@ public enum DayflowCalendar {
     return calendar
   }
 
+  /// Gregorian `YYYY-MM-DD` keys for CLI parsing (POSIX), independent of the user's locale calendar.
   public static func dayKeyFormatter(timeZone: TimeZone) -> DateFormatter {
     let formatter = DateFormatter()
     formatter.dateFormat = "yyyy-MM-dd"
+    formatter.locale = Locale(identifier: "en_US_POSIX")
     formatter.timeZone = timeZone
     return formatter
   }
@@ -58,9 +60,7 @@ public enum DayflowCalendar {
     let formatter = dayKeyFormatter(timeZone: calendar.timeZone)
     guard let fourAMToday = calendar.date(bySettingHour: dayStartHour, minute: 0, second: 0, of: date)
     else {
-      let start = calendar.startOfDay(for: date)
-      let end = calendar.date(byAdding: .day, value: 1, to: start) ?? start
-      return DayWindow(dayKey: formatter.string(from: start), start: start, end: end)
+      preconditionFailure("DayflowCalendar.dayWindow could not anchor \(dayStartHour):00 for \(date)")
     }
 
     let startOfDay: Date
@@ -92,7 +92,8 @@ public enum DayflowCalendar {
   /// Defaults to the app's Monday-first Gregorian calendar so CLI queries match
   /// the weekly UI rather than `Calendar.current`'s locale weekday.
   public static func weekWindow(containing date: Date, calendar: Calendar? = nil) -> WeekWindow {
-    let calendar = calendar ?? mondayGregorian(timeZone: .autoupdatingCurrent)
+    let timeZone = calendar?.timeZone ?? .autoupdatingCurrent
+    let calendar = mondayGregorian(timeZone: timeZone)
     let baseWeekStart =
       calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: date))
       ?? date

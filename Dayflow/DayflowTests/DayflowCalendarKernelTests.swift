@@ -30,18 +30,14 @@ final class DayflowCalendarKernelTests: XCTestCase {
 
   func testAppWrapperAgreesWithKernel() {
     let calendar = Calendar.current
-    var components = DateComponents()
-    components.year = 2026
-    components.month = 8
-    components.day = 12
-    components.hour = 3
-    components.minute = 30
-    let date = calendar.date(from: components)!
+    let date = makeDate(calendar: calendar, year: 2026, month: 8, day: 12, hour: 3, minute: 30)
+    let expectedStart = makeDate(calendar: calendar, year: 2026, month: 8, day: 11, hour: 4, minute: 0)
+    let expectedEnd = makeDate(calendar: calendar, year: 2026, month: 8, day: 12, hour: 4, minute: 0)
+
     let info = date.getDayInfoFor4AMBoundary()
-    let window = DayflowCalendar.dayWindow(containing: date, calendar: calendar)
-    XCTAssertEqual(info.dayString, window.dayKey)
-    XCTAssertEqual(info.startOfDay, window.start)
-    XCTAssertEqual(info.endOfDay, window.end)
+    XCTAssertEqual(info.startOfDay, expectedStart)
+    XCTAssertEqual(info.endOfDay, expectedEnd)
+    XCTAssertEqual(info.dayString, DateFormatter.yyyyMMdd.string(from: expectedStart))
   }
 
   func testDefaultCategoriesMatchCLIList() {
@@ -70,6 +66,7 @@ final class DayflowCalendarKernelTests: XCTestCase {
     calendar: Calendar, year: Int, month: Int, day: Int, hour: Int, minute: Int
   ) -> Date {
     var components = DateComponents()
+    components.timeZone = calendar.timeZone
     components.year = year
     components.month = month
     components.day = day

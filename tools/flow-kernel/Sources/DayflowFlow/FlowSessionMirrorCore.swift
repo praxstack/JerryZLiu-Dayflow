@@ -139,9 +139,7 @@ public final class FlowSessionMirrorCore {
 
   public func agentCompletedGoals(_ goals: [FlowGoalTask]) {
     guard !goals.isEmpty else { return }
-    webBridge?.sendEvent(
-      "goalsCompleted",
-      payload: ["goals": goals.map { ["id": $0.id, "title": $0.title] }])
+    webBridge?.sendEvent("tasksCompleted", payload: ["ids": goals.map(\.id)])
   }
 
   public func respondBackToWork() {

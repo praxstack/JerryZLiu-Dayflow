@@ -77,10 +77,10 @@ final class FlowTickLoopTests: XCTestCase {
     XCTAssertEqual(loop.beginTick(), .begin)
     _ = loop.finishTick(
       reply: #"{"status":"on_task","completed_goals":["g1","g2","g1"]}"#)
-    XCTAssertEqual(bridge.eventNames.filter { $0 == "goalsCompleted" }.count, 1)
-    let payload = bridge.events.last(where: { $0.event == "goalsCompleted" })?.payload
-    let goals = payload?["goals"] as? [[String: String]]
-    XCTAssertEqual(goals?.count, 2)
+    XCTAssertEqual(bridge.eventNames.filter { $0 == "tasksCompleted" }.count, 1)
+    let payload = bridge.events.last(where: { $0.event == "tasksCompleted" })?.payload
+    let ids = payload?["ids"] as? [String]
+    XCTAssertEqual(ids?.count, 2)
   }
 
   func testOffTaskNudgeThenOnTaskClosesIncident() {

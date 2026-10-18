@@ -391,11 +391,13 @@ public final class FlowTickLoop {
     }
 
     let goalTasks = mirror.snapshot.goalTasks ?? []
+    var seenThisBatch = reportedGoalIds
     let finished = result.parsed.completedGoals.compactMap { short -> FlowGoalTask? in
       let digits = short.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "g[] "))
       guard let index = Int(digits), index >= 1, index <= goalTasks.count else { return nil }
       let task = goalTasks[index - 1]
-      guard !reportedGoalIds.contains(task.id) else { return nil }
+      guard !seenThisBatch.contains(task.id) else { return nil }
+      seenThisBatch.insert(task.id)
       return task
     }
     if !finished.isEmpty {

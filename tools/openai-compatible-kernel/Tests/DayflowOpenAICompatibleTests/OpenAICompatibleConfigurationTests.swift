@@ -127,6 +127,18 @@ final class OpenAICompatibleConfigurationTests: XCTestCase {
       OpenAICompatibleHTTPErrorFormatter.userMessage(
         statusCode: 500, body: Data("plain failure".utf8)),
       "HTTP 500: plain failure")
+
+    let longBody = Data(String(repeating: "x", count: 400).utf8)
+    let longMessage = OpenAICompatibleHTTPErrorFormatter.userMessage(statusCode: 502, body: longBody)
+    XCTAssertTrue(longMessage.hasSuffix("…"))
+    XCTAssertLessThanOrEqual(longMessage.count, 303)
+
+    let leaky = try JSONSerialization.data(withJSONObject: [
+      "error": ["message": "Authorization Bearer sk-secret1234567890 failed"]
+    ])
+    XCTAssertEqual(
+      OpenAICompatibleHTTPErrorFormatter.userMessage(statusCode: 401, body: leaky),
+      "HTTP 401: Authorization Bearer [redacted] failed")
   }
 
   func testInjectedRuntimeTrimsBearerAndCopiesImageBudget() {

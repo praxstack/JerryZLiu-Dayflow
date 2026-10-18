@@ -523,7 +523,7 @@ struct LLMProviderSetupView: View {
                       setupState.testSuccessful = false
                     }
                     Text(
-                      "Some gateways allow fewer than 15 images per request. Dayflow samples each batch down to this limit (1–15)."
+                      "Some gateways allow fewer than 15 images per request. Dayflow samples each batch down to this limit (1–15). The connection test sends that many images."
                     )
                     .font(.custom("Figtree", size: 11))
                     .foregroundColor(SettingsStyle.meta)
@@ -545,6 +545,7 @@ struct LLMProviderSetupView: View {
                       ),
                     requiresMeaningfulResponse: true,
                     enforcesLocalLatencyLimit: false,
+                    visionImageProbeCount: setupState.openAICompatibleMaxImages,
                     onTestComplete: { success in
                       setupState.hasTestedConnection = true
                       setupState.testSuccessful = success

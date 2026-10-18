@@ -31,11 +31,12 @@ public enum OpenAICompatibleScreenshotBudget {
 public enum OpenAICompatibleHTTPErrorFormatter {
   public static func userMessage(statusCode: Int, body: Data) -> String {
     if let extracted = extractMessage(from: body), !extracted.isEmpty {
-      return "HTTP \(statusCode): \(extracted)"
+      return sanitizeForDisplay("HTTP \(statusCode): \(extracted)")
     }
     let text = String(data: body, encoding: .utf8)?
       .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-    return text.isEmpty ? "HTTP \(statusCode)" : "HTTP \(statusCode): \(text)"
+    if text.isEmpty { return "HTTP \(statusCode)" }
+    return sanitizeForDisplay("HTTP \(statusCode): \(text)")
   }
 
   public static func extractMessage(from body: Data) -> String? {
@@ -64,6 +65,22 @@ public enum OpenAICompatibleHTTPErrorFormatter {
   }
 
   private static let rawMetadataMaxLength = 500
+  private static let userMessageMaxLength = 300
+
+  static func sanitizeForDisplay(_ message: String) -> String {
+    var sanitized = message
+    if let bearer = sanitized.range(
+      of: #"(?i)bearer\s+[A-Za-z0-9._\-]+"#, options: .regularExpression)
+    {
+      sanitized.replaceSubrange(bearer, with: "Bearer [redacted]")
+    }
+    if let sk = sanitized.range(of: #"sk-[A-Za-z0-9]{8,}"#, options: .regularExpression) {
+      sanitized.replaceSubrange(sk, with: "sk-[redacted]")
+    }
+    if sanitized.count <= userMessageMaxLength { return sanitized }
+    let end = sanitized.index(sanitized.startIndex, offsetBy: userMessageMaxLength)
+    return String(sanitized[..<end]) + "…"
+  }
 
   private static func appendOpenRouterRaw(_ message: String, metadata: Any?) -> String {
     guard let metadata = metadata as? [String: Any],

@@ -915,62 +915,30 @@ extension StorageManager {
     timeFormatter.locale = Locale(identifier: "en_US_POSIX")
 
     try? timedWrite("replaceTimelineCardsInRange(\(newCards.count)_cards)") { db in
-      // First, fetch the video paths that will be soft-deleted
-      // Retire overlapping non-System cards from any batch; scope System cards to this batch.
+      let batchEndTs = try TimelineCardReplacementPolicy.batchEndTimestamp(
+        db: db, batchId: batchId, fallbackToTs: toTs)
+      let retirementArgs: [DatabaseValueConvertible] = [
+        toTs, fromTs, fromTs, toTs, batchId, batchEndTs,
+      ]
+
       let videoRows = try Row.fetchAll(
         db,
         sql: """
               SELECT video_summary_url FROM timeline_cards
-              WHERE ((start_ts < ? AND end_ts > ?)
-                 OR (start_ts >= ? AND start_ts < ?))
+              WHERE \(TimelineCardReplacementPolicy.timeRangeOverlapSQL)
                  AND video_summary_url IS NOT NULL
-                 AND is_deleted = 0
-                 AND (category != 'System' OR batch_id = ?)
-          """, arguments: [toTs, fromTs, fromTs, toTs, batchId])
+                 AND \(TimelineCardReplacementPolicy.retirementPredicateSQL)
+          """, arguments: StatementArguments(retirementArgs))
 
       videoPaths = videoRows.compactMap { $0["video_summary_url"] as? String }
 
-      // Fetch the cards that will be deleted for debugging
-      let cardsToDelete = try Row.fetchAll(
-        db,
-        sql: """
-              SELECT id, start, end, title FROM timeline_cards
-              WHERE ((start_ts < ? AND end_ts > ?)
-                 OR (start_ts >= ? AND start_ts < ?))
-                 AND is_deleted = 0
-                 AND (category != 'System' OR batch_id = ?)
-          """, arguments: [toTs, fromTs, fromTs, toTs, batchId])
-
-      for _ in cardsToDelete {
-        // Cards being deleted - no-op needed, just iterating to trigger side effects
-      }
-
-      // Soft delete existing cards in the range using timestamp columns
-      // Preserve error cards (category='System') from other batches so they remain visible
       try db.execute(
         sql: """
               UPDATE timeline_cards
               SET is_deleted = 1
-              WHERE ((start_ts < ? AND end_ts > ?)
-                 OR (start_ts >= ? AND start_ts < ?))
-                 AND is_deleted = 0
-                 AND (category != 'System' OR batch_id = ?)
-          """, arguments: [toTs, fromTs, fromTs, toTs, batchId])
-
-      // Verify soft deletion (count remaining active cards)
-      let remainingCount =
-        try Int.fetchOne(
-          db,
-          sql: """
-                SELECT COUNT(*) FROM timeline_cards
-                WHERE ((start_ts < ? AND end_ts > ?)
-                   OR (start_ts >= ? AND start_ts < ?))
-                   AND is_deleted = 0
-            """, arguments: [toTs, fromTs, fromTs, toTs]) ?? 0
-
-      if remainingCount > 0 {
-      } else {
-      }
+              WHERE \(TimelineCardReplacementPolicy.timeRangeOverlapSQL)
+                 AND \(TimelineCardReplacementPolicy.retirementPredicateSQL)
+          """, arguments: StatementArguments(retirementArgs))
 
       // Insert new cards
       for card in newCards {

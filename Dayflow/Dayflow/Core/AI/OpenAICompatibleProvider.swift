@@ -154,9 +154,13 @@ final class OpenAICompatibleProvider: ChatGPTTimelinePromptSupporting {
     } catch {
       try Task.checkCancellation()
       if error is CancellationError { throw error }
-      throw invalidOutput(
-        "Failed to describe any screenshots. Check that your OpenAI-compatible endpoint is reachable, the model supports vision, and any required API key is valid. (\(error.localizedDescription))"
-      )
+      let lower = error.localizedDescription.lowercased()
+      if lower.contains("api request failed with status") {
+        throw invalidOutput(
+          "Failed to describe any screenshots. Check that your OpenAI-compatible endpoint is reachable, the model supports vision, and any required API key is valid. (\(error.localizedDescription))"
+        )
+      }
+      throw error
     }
   }
 

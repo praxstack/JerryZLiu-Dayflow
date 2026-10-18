@@ -471,12 +471,14 @@ extension OllamaProvider {
 
     // Describe each screenshot
     var frameDescriptions: [(timestamp: TimeInterval, description: String)] = []
+    var readableFrameCount = 0
 
     for screenshot in sampledScreenshots {
       guard let frameData = loadScreenshotAsFrameData(screenshot, relativeTo: firstTs) else {
         print("[OLLAMA] ⚠️ Failed to load screenshot: \(screenshot.filePath)")
         continue
       }
+      readableFrameCount += 1
 
       if let description = await getSimpleFrameDescription(frameData, batchId: batchId) {
         frameDescriptions.append((timestamp: frameData.timestamp, description: description))
@@ -484,10 +486,14 @@ extension OllamaProvider {
     }
 
     guard !frameDescriptions.isEmpty else {
+      let message =
+        readableFrameCount == 0
+        ? "No readable screenshots to transcribe."
+        : localScreenshotDescriptionFailureMessage()
       throw NSError(
         domain: "OllamaProvider",
         code: 11,
-        userInfo: [NSLocalizedDescriptionKey: localScreenshotDescriptionFailureMessage()]
+        userInfo: [NSLocalizedDescriptionKey: message]
       )
     }
 

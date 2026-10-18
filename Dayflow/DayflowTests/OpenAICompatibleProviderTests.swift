@@ -46,6 +46,33 @@ final class OpenAICompatibleProviderTests: XCTestCase {
     }
   }
 
+  func testInvalidModelOutputDoesNotSuggestEndpointMisconfiguration() async throws {
+    let image = NSBitmapImageRep(
+      bitmapDataPlanes: nil, pixelsWide: 2, pixelsHigh: 2, bitsPerSample: 8,
+      samplesPerPixel: 3, hasAlpha: false, isPlanar: false, colorSpaceName: .deviceRGB,
+      bytesPerRow: 0, bitsPerPixel: 0)!
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent(
+      "\(UUID().uuidString).jpg")
+    try XCTUnwrap(image.representation(using: .jpeg, properties: [:])).write(to: url)
+    defer { try? FileManager.default.removeItem(at: url) }
+    let screenshots = [
+      Screenshot(
+        id: 1, capturedAt: 1000, filePath: url.path, fileSize: nil, idleSecondsAtCapture: nil,
+        isDeleted: false)
+    ]
+    let provider = OpenAICompatibleProvider(configuration: configuration()) { _, _, _ in
+      return "not-json"
+    }
+    do {
+      _ = try await provider.transcribeScreenshots(
+        screenshots, batchStartTime: Date(timeIntervalSince1970: 1000), batchId: 1)
+      XCTFail("Expected invalid output failure")
+    } catch let error as NSError {
+      XCTAssertEqual(error.domain, "OpenAICompatibleProvider")
+      XCTAssertFalse(error.localizedDescription.contains("endpoint is reachable"))
+    }
+  }
+
   func testTranscriptionRequestFailureSurfacesOpenAICompatibleHint() async throws {
     let image = NSBitmapImageRep(
       bitmapDataPlanes: nil, pixelsWide: 2, pixelsHigh: 2, bitsPerSample: 8,

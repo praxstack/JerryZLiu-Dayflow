@@ -414,7 +414,9 @@ enum TimelineFailureClassifier {
     (
       .localModelMissing,
       [
-        "ollama api request failed with status 404", "no models loaded",
+        "ollama api request failed with status 404",
+        "openai-compatible api request failed with status 404",
+        "no models loaded",
         "context size has been exceeded",
       ]
     ),

@@ -339,7 +339,12 @@ final class DailyRecapGenerator {
             break
           }
           if entryLines[1].count + 1 > summaryBudget {
-            entryLines[1] = String(entryLines[1].prefix(summaryBudget))
+            let maxSummaryLength = max(0, summaryBudget - 1)
+            if maxSummaryLength == 0 {
+              entryLines = [entryLines[0]]
+            } else {
+              entryLines[1] = String(entryLines[1].prefix(maxSummaryLength))
+            }
             entryLength = entryCharacterCount(entryLines)
           }
         }

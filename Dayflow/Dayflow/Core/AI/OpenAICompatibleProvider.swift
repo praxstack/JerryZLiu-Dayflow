@@ -176,6 +176,9 @@ final class OpenAICompatibleProvider: ChatGPTTimelinePromptSupporting {
   }
 
   func generateText(prompt: String) async throws -> (text: String, log: LLMCall) {
-    try await transport.generateText(prompt: prompt)
+    try await transport.generateText(
+      prompt: prompt,
+      maxTokens: OllamaProvider.resolvedMaxOutputTokens(
+        fallback: OllamaProvider.openAICompatibleDefaultMaxOutputTokens))
   }
 }

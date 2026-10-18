@@ -22,7 +22,8 @@ extension OllamaProvider {
 
   static func storedMaxOutputTokensOverride(from defaults: UserDefaults = .standard) -> Int? {
     let configured = defaults.integer(forKey: maxOutputTokensDefaultsKey)
-    return configured > 0 ? configured : nil
+    guard configured > 0 else { return nil }
+    return min(max(configured, minPersistedMaxOutputTokens), maxPersistedMaxOutputTokens)
   }
 
   static func persistMaxOutputTokens(_ value: Int?, to defaults: UserDefaults = .standard) {

@@ -44,6 +44,18 @@ final class OllamaProviderMaxTokensTests: XCTestCase {
       OllamaProvider.resolvedMaxOutputTokens(from: defaults, fallback: 65536), 65536)
   }
 
+  func testRawDefaultsWriteValuesAreClampedOnRead() {
+    let suite = "Dayflow.OllamaProviderMaxTokensTests.\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: suite)!
+    defer { defaults.removePersistentDomain(forName: suite) }
+
+    defaults.set(200_000, forKey: OllamaProvider.maxOutputTokensDefaultsKey)
+    XCTAssertEqual(OllamaProvider.resolvedMaxOutputTokens(from: defaults), 128_000)
+
+    defaults.set(100, forKey: OllamaProvider.maxOutputTokensDefaultsKey)
+    XCTAssertEqual(OllamaProvider.resolvedMaxOutputTokens(from: defaults), 256)
+  }
+
   func testPersistClampsToSupportedRange() {
     let suite = "Dayflow.OllamaProviderMaxTokensTests.\(UUID().uuidString)"
     let defaults = UserDefaults(suiteName: suite)!

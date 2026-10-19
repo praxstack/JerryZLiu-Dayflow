@@ -572,7 +572,9 @@ final class ScreenRecorder: NSObject, @unchecked Sendable {
 
     let delay = min(
       Self.backoffDelay(Self.captureBackoffDelays, failureCount: captureFailureCount), maxDelay)
-    captureTimer?.schedule(deadline: .now() + delay, repeating: ScreenshotConfig.interval)
+    let baseInterval = ScreenshotConfig.interval
+    captureTimer?.schedule(deadline: .now() + delay, repeating: baseInterval)
+    currentCaptureInterval = baseInterval
     dbg("capture failed (\(reason)) #\(captureFailureCount) – next attempt in \(delay)s")
 
     // One event per step while the delay is still growing, so a Mac that stays
@@ -783,7 +785,9 @@ final class ScreenRecorder: NSObject, @unchecked Sendable {
       lastCaptureFailureReason == "no_display",
       cachedDisplay != nil
     else { return }
-    captureTimer?.schedule(deadline: .now(), repeating: ScreenshotConfig.interval)
+    let baseInterval = ScreenshotConfig.interval
+    captureTimer?.schedule(deadline: .now(), repeating: baseInterval)
+    currentCaptureInterval = baseInterval
   }
 
   /// Only call through `runDisplayRefresh()`.

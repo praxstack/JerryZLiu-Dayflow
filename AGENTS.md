@@ -44,7 +44,7 @@ bash fixtures/create_fixture_db.sh
 DAYFLOW_DB=fixtures/chunks.sqlite "$(swift build --show-bin-path)/dayflow" timeline 2026-03-11 --json
 ```
 
-Cloud Agent:
+Cloud Agent (macOS only until Linux CLI port lands):
 
 ```bash
 bash scripts/cloud-agent-install.sh
@@ -69,7 +69,9 @@ bash scripts/cloud-agent-verify.sh
 - Do not enable real agent edits in CI.
 - Prefer `plans/` for multi-step work; one focused PR per plan/issue.
 - Do not install or enable MCP servers without explicit user approval.
-- Direct pushes to `main` are not allowed from Cloud Agent overnight runs.
+- Use pull requests; do not push to `main` from unattended Cloud Agent runs. If
+  `gh pr create` fails with 403, stop and ask the maintainer (do not push `main`
+  as a workaround unless they explicitly approve an exception).
 
 ## Related docs
 

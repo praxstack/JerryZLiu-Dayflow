@@ -915,61 +915,41 @@ extension StorageManager {
     timeFormatter.locale = Locale(identifier: "en_US_POSIX")
 
     try? timedWrite("replaceTimelineCardsInRange(\(newCards.count)_cards)") { db in
-      // First, fetch the video paths that will be soft-deleted
-      // Note: We exclude error cards (category='System') from other batches to preserve them
+      let batchEndTs = try TimelineCardReplacementPolicy.batchEndTimestamp(
+        db: db, batchId: batchId, fallbackToTs: toTs)
+      let retirementArgs: [DatabaseValueConvertible] = [
+        toTs, fromTs, fromTs, toTs, batchId, batchEndTs,
+      ]
+
       let videoRows = try Row.fetchAll(
         db,
         sql: """
               SELECT video_summary_url FROM timeline_cards
-              WHERE ((start_ts < ? AND end_ts > ?)
-                 OR (start_ts >= ? AND start_ts < ?))
+              WHERE \(TimelineCardReplacementPolicy.timeRangeOverlapSQL)
                  AND video_summary_url IS NOT NULL
-                 AND is_deleted = 0
-                 AND (category != 'System' OR batch_id = ?)
-          """, arguments: [toTs, fromTs, fromTs, toTs, batchId])
+                 AND \(TimelineCardReplacementPolicy.retirementPredicateSQL)
+          """, arguments: StatementArguments(retirementArgs))
 
       videoPaths = videoRows.compactMap { $0["video_summary_url"] as? String }
 
-      // Fetch the cards that will be deleted for debugging
-      let cardsToDelete = try Row.fetchAll(
-        db,
-        sql: """
-              SELECT id, start, end, title FROM timeline_cards
-              WHERE ((start_ts < ? AND end_ts > ?)
-                 OR (start_ts >= ? AND start_ts < ?))
-                 AND is_deleted = 0
-                 AND (category != 'System' OR batch_id = ?)
-          """, arguments: [toTs, fromTs, fromTs, toTs, batchId])
-
-      for _ in cardsToDelete {
-        // Cards being deleted - no-op needed, just iterating to trigger side effects
-      }
-
-      // Soft delete existing cards in the range using timestamp columns
-      // Preserve error cards (category='System') from other batches so they remain visible
       try db.execute(
         sql: """
               UPDATE timeline_cards
               SET is_deleted = 1
-              WHERE ((start_ts < ? AND end_ts > ?)
-                 OR (start_ts >= ? AND start_ts < ?))
-                 AND is_deleted = 0
-                 AND (category != 'System' OR batch_id = ?)
-          """, arguments: [toTs, fromTs, fromTs, toTs, batchId])
+              WHERE \(TimelineCardReplacementPolicy.timeRangeOverlapSQL)
+                 AND \(TimelineCardReplacementPolicy.retirementPredicateSQL)
+          """, arguments: StatementArguments(retirementArgs))
 
-      // Verify soft deletion (count remaining active cards)
-      let remainingCount =
-        try Int.fetchOne(
-          db,
-          sql: """
-                SELECT COUNT(*) FROM timeline_cards
-                WHERE ((start_ts < ? AND end_ts > ?)
-                   OR (start_ts >= ? AND start_ts < ?))
-                   AND is_deleted = 0
-            """, arguments: [toTs, fromTs, fromTs, toTs]) ?? 0
-
-      if remainingCount > 0 {
-      } else {
+      let preservedArgs: [DatabaseValueConvertible] = [batchEndTs, toTs, fromTs, fromTs, toTs]
+      let preservedRows = try Row.fetchAll(
+        db,
+        sql: """
+              SELECT start_ts, end_ts FROM timeline_cards
+              WHERE \(TimelineCardReplacementPolicy.preservedNewerBatchOverlapSQL)
+          """, arguments: StatementArguments(preservedArgs))
+      let preservedRanges: [(startTs: Int, endTs: Int)] = preservedRows.compactMap { row in
+        guard let start: Int = row["start_ts"], let end: Int = row["end_ts"] else { return nil }
+        return (start, end)
       }
 
       // Insert new cards
@@ -1031,10 +1011,29 @@ extension StorageManager {
           endDate = calendar.date(byAdding: .day, value: 1, to: endDate) ?? endDate
         }
 
-        let endTs = Int(endDate.timeIntervalSince1970)
+        var insertStartTs = startTs
+        var insertEndTs = Int(endDate.timeIntervalSince1970)
+
+        guard
+          let clipped = TimelineCardReplacementPolicy.clipInsertTimestamps(
+            startTs: insertStartTs, endTs: insertEndTs, preserved: preservedRanges)
+        else {
+          continue
+        }
+        insertStartTs = clipped.startTs
+        insertEndTs = clipped.endTs
+        if clipped.startTs != startTs {
+          startDate = Date(timeIntervalSince1970: TimeInterval(clipped.startTs))
+        }
+        if clipped.endTs != Int(endDate.timeIntervalSince1970) {
+          endDate = Date(timeIntervalSince1970: TimeInterval(clipped.endTs))
+        }
 
         // Calculate the day string using 4 AM boundary rules
         let (dayString, _, _) = startDate.getDayInfoFor4AMBoundary()
+
+        let startClock = timeFormatter.string(from: startDate)
+        let endClock = timeFormatter.string(from: endDate)
 
         try db.execute(
           sql: """
@@ -1045,7 +1044,7 @@ extension StorageManager {
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
           arguments: [
-            batchId, card.startTimestamp, card.endTimestamp, startTs, endTs, dayString, card.title,
+            batchId, startClock, endClock, insertStartTs, insertEndTs, dayString, card.title,
             card.summary, card.category, card.subcategory, card.detailedSummary, metadataString,
           ])
 

@@ -143,7 +143,7 @@ Extend `.github/workflows/ci.yml`:
 - [x] No write tests require running Dayflow.app (Unix-socket mock + `DAYFLOW_SOCK`)
 - [x] `plans/README.md` row 003 → DONE (remaining: Xcode CLI fold-in, live app socket)
 
-MCP `untrustedNote` is asserted in Swift (`MCPToolCatalogTests`) and Python `tools/list`.
+MCP `untrustedNote` is asserted in Python `tools/list`.
 
 ## STOP conditions
 

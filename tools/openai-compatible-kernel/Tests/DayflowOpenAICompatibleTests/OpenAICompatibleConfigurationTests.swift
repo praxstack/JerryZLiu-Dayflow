@@ -139,6 +139,27 @@ final class OpenAICompatibleConfigurationTests: XCTestCase {
     XCTAssertEqual(
       OpenAICompatibleHTTPErrorFormatter.userMessage(statusCode: 401, body: leaky),
       "HTTP 401: Authorization Bearer [redacted] failed")
+
+    let openRouterKey = try JSONSerialization.data(withJSONObject: [
+      "error": ["message": "invalid key sk-or-v1-0123456789abcdef0123456789"]
+    ])
+    XCTAssertEqual(
+      OpenAICompatibleHTTPErrorFormatter.userMessage(statusCode: 401, body: openRouterKey),
+      "HTTP 401: invalid key sk-[redacted]")
+
+    let apiKeyEcho = try JSONSerialization.data(withJSONObject: [
+      "error": ["message": "bad request api_key=supersecretvalue"]
+    ])
+    XCTAssertEqual(
+      OpenAICompatibleHTTPErrorFormatter.userMessage(statusCode: 400, body: apiKeyEcho),
+      "HTTP 400: bad request api_key=[redacted]")
+  }
+
+  func testSetupVisionProbeImageCountMatchesOnboardingStepper() {
+    XCTAssertEqual(OpenAICompatibleScreenshotBudget.setupVisionProbeImageCount(configuredLimit: nil), 1)
+    XCTAssertEqual(OpenAICompatibleScreenshotBudget.setupVisionProbeImageCount(configuredLimit: 8), 8)
+    XCTAssertEqual(OpenAICompatibleScreenshotBudget.setupVisionProbeImageCount(configuredLimit: 0), 1)
+    XCTAssertEqual(OpenAICompatibleScreenshotBudget.setupVisionProbeImageCount(configuredLimit: 99), 15)
   }
 
   func testInjectedRuntimeTrimsBearerAndCopiesImageBudget() {

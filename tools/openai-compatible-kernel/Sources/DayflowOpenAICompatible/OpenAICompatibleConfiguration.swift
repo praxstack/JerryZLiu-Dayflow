@@ -15,6 +15,11 @@ public enum OpenAICompatibleScreenshotBudget {
     min(maximumLimit, max(minimumLimit, value))
   }
 
+  /// Image count for onboarding vision endpoint probes (defaults to 1 when unset).
+  public static func setupVisionProbeImageCount(configuredLimit: Int?) -> Int {
+    max(1, configuredLimit.map { clamp($0) } ?? 1)
+  }
+
   /// Evenly samples `items` down to `limit`, always keeping the first and last when possible.
   /// A limit of 1 keeps the most recent item (last in chronological order).
   public static func select<T>(_ items: [T], limit: Int) -> [T] {
@@ -69,13 +74,14 @@ public enum OpenAICompatibleHTTPErrorFormatter {
 
   static func sanitizeForDisplay(_ message: String) -> String {
     var sanitized = message
-    if let bearer = sanitized.range(
-      of: #"(?i)bearer\s+[A-Za-z0-9._\-]+"#, options: .regularExpression)
-    {
-      sanitized.replaceSubrange(bearer, with: "Bearer [redacted]")
-    }
-    if let sk = sanitized.range(of: #"sk-[A-Za-z0-9]{8,}"#, options: .regularExpression) {
-      sanitized.replaceSubrange(sk, with: "sk-[redacted]")
+    let secretPatterns: [(String, String)] = [
+      (#"(?i)\bapi[_-]?key\s*[:=]\s*[^\s,;]+"#, "api_key=[redacted]"),
+      (#"(?i)bearer\s+[A-Za-z0-9._~+/=-]+"#, "Bearer [redacted]"),
+      (#"\bsk[-_A-Za-z0-9:.]{8,}\b"#, "sk-[redacted]"),
+    ]
+    for (pattern, replacement) in secretPatterns {
+      sanitized = sanitized.replacingOccurrences(
+        of: pattern, with: replacement, options: .regularExpression)
     }
     if sanitized.count <= userMessageMaxLength { return sanitized }
     let end = sanitized.index(sanitized.startIndex, offsetBy: userMessageMaxLength)

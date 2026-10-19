@@ -189,10 +189,8 @@ struct LocalLLMTestView: View {
     }
 
     let imageParts: [LocalLLMChatContent] = {
-      let probeCount = visionImageProbeCount.map {
-        OpenAICompatibleScreenshotBudget.clamp($0)
-      } ?? 1
-      let count = max(1, probeCount)
+      let count = OpenAICompatibleScreenshotBudget.setupVisionProbeImageCount(
+        configuredLimit: visionImageProbeCount)
       return (0..<count).map { _ in .imageDataURL(LocalLLMTestConstants.blankImageDataURL) }
     }()
 

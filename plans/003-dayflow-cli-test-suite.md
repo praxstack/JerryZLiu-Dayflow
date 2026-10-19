@@ -18,7 +18,7 @@
 - **Category**: tests
 - **Planned at**: commit `274c059`, 2026-08-29
 - **Landed (partial)**: DayflowCLICore + DayBoundary/JSONOut/Queries Swift tests +
-  Python CLI/MCP suite (prax/cli-test-suite-6fc7). Write-tool mock tests still TODO.
+  Python CLI/MCP suite (prax/cli-test-suite-6fc7).
 
 ## Why this matters
 

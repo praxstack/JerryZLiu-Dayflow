@@ -68,8 +68,7 @@ final class AgentBridgeProtocolTests: XCTestCase {
 
 final class AgentBridgeSocketTests: XCTestCase {
   func testSendTalksToMockUnixSocket() throws {
-    let socketPath = FileManager.default.temporaryDirectory
-      .appendingPathComponent("dayflow-bridge-\(UUID().uuidString).sock").path
+    let socketPath = "/tmp/dfb-\(UUID().uuidString.prefix(8)).sock"
     let lock = NSLock()
     var captured: [String: Any] = [:]
     let server = try MockAgentBridgeServer(socketPath: socketPath) { request in

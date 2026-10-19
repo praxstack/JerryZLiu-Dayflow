@@ -793,7 +793,8 @@ final class LLMService: LLMServicing {
 
           // Convert TimelineCards to ActivityCardData for context
           let existingActivityCards = existingTimelineCards.filter { card in
-            card.category != "System"
+            TimelineReplacementPolicy.isUsableActivityContext(
+              category: card.category, title: card.title)
           }.map { card in
             ActivityCardData(
               startTime: card.startTimestamp,
@@ -1100,7 +1101,8 @@ final class LLMService: LLMServicing {
             from: batchStartDate,
             to: batchEndDate,
             with: [errorCard],
-            batchId: batchId
+            batchId: batchId,
+            replaceOverlappingProcessingFailedFromOtherBatches: true
           )
 
         // Clean up any deleted video files (if there were existing cards)
@@ -1144,7 +1146,7 @@ final class LLMService: LLMServicing {
       endTimestamp: endTimeStr,
       category: "System",
       subcategory: "Error",
-      title: "Processing failed",
+      title: TimelineReplacementPolicy.processingFailedTitle,
       summary: "\(message) Your recording is saved.",
       detailedSummary: "",
       distractions: nil,

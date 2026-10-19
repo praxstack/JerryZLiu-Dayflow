@@ -863,7 +863,8 @@ final class AnalysisManager: AnalysisManaging {
       from: replacementStart,
       to: batchEnd,
       with: [idleCard],
-      batchId: batchId
+      batchId: batchId,
+      replaceOverlappingProcessingFailedFromOtherBatches: false
     )
 
     guard insertedCardIds.isEmpty == false else {

@@ -239,55 +239,127 @@ final class DailyRecapGenerator {
   }
 
   func generate(context: DailyRecapGenerationContext) async throws -> DailyStandupDraft {
-    guard !context.cards.isEmpty else {
+    let usableCards = context.cards.filter {
+      !TimelineReplacementPolicy.isProcessingFailedTitle($0.title)
+    }
+    guard !usableCards.isEmpty else {
       throw DailyRecapGeneratorError.emptyCards(day: context.sourceDayString)
     }
+    let filteredContext = DailyRecapGenerationContext(
+      targetDayString: context.targetDayString,
+      sourceDayString: context.sourceDayString,
+      cards: usableCards,
+      observations: context.observations,
+      priorEntries: context.priorEntries,
+      highlightsTitle: context.highlightsTitle,
+      tasksTitle: context.tasksTitle,
+      blockersTitle: context.blockersTitle
+    )
 
     let provider = selectedProvider()
     let metadata = DailyStandupGenerationMetadata(
       provider: provider,
-      sourceDay: context.sourceDayString
+      sourceDay: filteredContext.sourceDayString
     )
 
     switch provider {
     case .dayflow:
-      return try await generateWithDayflow(context: context, metadata: metadata)
+      return try await generateWithDayflow(context: filteredContext, metadata: metadata)
     case .local:
-      return try await generateWithLocal(context: context, metadata: metadata)
+      return try await generateWithLocal(context: filteredContext, metadata: metadata)
     case .gemini:
-      return try await generateWithGemini(context: context, metadata: metadata)
+      return try await generateWithGemini(context: filteredContext, metadata: metadata)
     case .chatgpt:
-      return try await generateWithChatGPT(context: context, metadata: metadata)
+      return try await generateWithChatGPT(context: filteredContext, metadata: metadata)
     case .claude:
-      return try await generateWithClaude(context: context, metadata: metadata)
+      return try await generateWithClaude(context: filteredContext, metadata: metadata)
     case .none:
       throw DailyRecapGeneratorError.noProviderSelected
     }
   }
 
-  static func makeCardsText(day: String, cards: [TimelineCard]) -> String {
-    let ordered = cards.sorted { lhs, rhs in
-      if lhs.startTimestamp == rhs.startTimestamp {
-        return lhs.endTimestamp < rhs.endTimestamp
-      }
-      return lhs.startTimestamp < rhs.startTimestamp
-    }
+  // Rough ceiling on the activity log's size (~15K tokens). Normal days stay far
+  // below it; it only bites when something floods the day with cards
+  // (JerryZLiu/Dayflow#285).
+  static let recapCardsTextMaxCharacters = 60_000
+
+  private static func recapCardsSortOrder(_ lhs: TimelineCard, _ rhs: TimelineCard) -> Bool {
+    let leftStart = parseTimeHMMA(timeString: lhs.startTimestamp) ?? Int.max
+    let rightStart = parseTimeHMMA(timeString: rhs.startTimestamp) ?? Int.max
+    if leftStart != rightStart { return leftStart < rightStart }
+    let leftEnd = parseTimeHMMA(timeString: lhs.endTimestamp) ?? Int.max
+    let rightEnd = parseTimeHMMA(timeString: rhs.endTimestamp) ?? Int.max
+    if leftEnd != rightEnd { return leftEnd < rightEnd }
+    return (lhs.recordId ?? 0) < (rhs.recordId ?? 0)
+  }
+
+  private static func recapOmittedNotice(omittedCount: Int) -> String {
+    "... and \(omittedCount) more activities omitted to stay within the model's context limit."
+  }
+
+  static func makeCardsText(
+    day: String, cards: [TimelineCard], maxCharacters: Int = recapCardsTextMaxCharacters
+  ) -> String {
+    let ordered = cards
+      .filter { !TimelineReplacementPolicy.isProcessingFailedTitle($0.title) }
+      .sorted(by: recapCardsSortOrder)
 
     guard !ordered.isEmpty else {
       return String(localized: "No timeline activities were recorded for \(day).")
     }
 
     var lines: [String] = ["Timeline activities for \(day):", ""]
+    let headerLength = lines.joined(separator: "\n").count
+    let reservedNoticeLength = recapOmittedNotice(omittedCount: ordered.count).count + 1
+    var remaining = max(0, maxCharacters - headerLength - reservedNoticeLength)
+    var includedCount = 0
+
     for (index, card) in ordered.enumerated() {
       let title = standupLine(from: card) ?? String(localized: "Untitled activity")
       let start = humanReadableClockTime(card.startTimestamp)
       let end = humanReadableClockTime(card.endTimestamp)
-      lines.append("\(index + 1). \(start) - \(end): \(title)")
+      var entryLines = ["\(index + 1). \(start) - \(end): \(title)"]
 
       let summary = card.summary.trimmingCharacters(in: .whitespacesAndNewlines)
       if !summary.isEmpty, summary != title {
-        lines.append("   \(summary)")
+        entryLines.append("   \(summary)")
       }
+
+      func entryCharacterCount(_ lines: [String]) -> Int {
+        lines.reduce(0) { $0 + $1.count + 1 }
+      }
+
+      var entryLength = entryCharacterCount(entryLines)
+      if entryLength > remaining {
+        if remaining <= 0 { break }
+        if entryLines.count > 1 {
+          let titleLineCost = entryLines[0].count + 1
+          let summaryBudget = max(0, remaining - titleLineCost)
+          if summaryBudget <= 0 {
+            break
+          }
+          if entryLines[1].count + 1 > summaryBudget {
+            let maxSummaryLength = max(0, summaryBudget - 1)
+            if maxSummaryLength == 0 {
+              entryLines = [entryLines[0]]
+            } else {
+              entryLines[1] = String(entryLines[1].prefix(maxSummaryLength))
+            }
+            entryLength = entryCharacterCount(entryLines)
+          }
+        }
+        if entryLength > remaining {
+          break
+        }
+      }
+
+      lines.append(contentsOf: entryLines)
+      remaining -= entryLength
+      includedCount += 1
+    }
+
+    if includedCount < ordered.count {
+      lines.append(recapOmittedNotice(omittedCount: ordered.count - includedCount))
     }
 
     return lines.joined(separator: "\n")

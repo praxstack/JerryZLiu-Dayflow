@@ -14,8 +14,13 @@ import Foundation
 /// full LLM processing — the opposite of what this throttle is for. See
 /// IdleCaptureIntervalTests.testWorstCaseBlipDuringIdleStaysWithinClassifierGapLimit.
 enum IdleCaptureDefaults {
-  static let idleThresholdSeconds: TimeInterval = 120
-  static let throttledIntervalSeconds: TimeInterval = 30
+  /// Match `IdleBatchRules.qualifyingIdleSecondsAtCapture` so we throttle once
+  /// screenshots would count as "qualified idle", keeping the 10s ramp window
+  /// small enough for the 90% qualified-idle ratio.
+  static let idleThresholdSeconds: TimeInterval = 60
+  /// Largest interval that keeps worst-case blip gaps under 30s *and* leaves
+  /// enough qualified samples in a 15-minute batch alongside the 10s ramp.
+  static let throttledIntervalSeconds: TimeInterval = 16
 }
 
 /// User preference for idle-throttled capture. Only an on/off toggle is
@@ -39,6 +44,21 @@ enum IdleCapturePreferences {
 /// the user has been idle. Kept free of ScreenRecorder's actors/queues so it
 /// can be unit-tested directly.
 enum IdleCaptureInterval {
+  /// Effective capture interval for the recorder, honoring the user toggle.
+  static func effectiveInterval(
+    baseInterval: TimeInterval = ScreenshotConfig.interval,
+    idleSeconds: Int?,
+    throttleEnabled: Bool = IdleCapturePreferences.enabled
+  ) -> TimeInterval {
+    guard throttleEnabled else { return baseInterval }
+    return interval(
+      baseInterval: baseInterval,
+      idleThrottledInterval: IdleCaptureDefaults.throttledIntervalSeconds,
+      idleSeconds: idleSeconds,
+      idleThresholdSeconds: IdleCaptureDefaults.idleThresholdSeconds
+    )
+  }
+
   static func interval(
     baseInterval: TimeInterval,
     idleThrottledInterval: TimeInterval,

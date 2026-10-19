@@ -6,15 +6,21 @@ class ProviderSetupState: ObservableObject {
   @Published var steps: [SetupStep] = []
   @Published var currentStepIndex: Int = 0
   @Published var apiKey: String = ""
+  @Published private(set) var hasStoredGeminiAPIKey = false
   @Published var geminiAPIKeySaveError: String?
+  @Published var saveErrorMessage: String?
   @Published var hasTestedConnection: Bool = false
   @Published var testSuccessful: Bool = false
   @Published var geminiModel: GeminiModel
   // Local engine configuration
-  @Published var localEngine: LocalEngine = .lmstudio
-  @Published var localBaseURL: String = LocalEngine.lmstudio.defaultBaseURL
-  @Published var localModelId: String = LocalModelPreferences.defaultModelId(for: .lmstudio)
-  @Published var localAPIKey: String = UserDefaults.standard.string(forKey: "llmLocalAPIKey") ?? ""
+  @Published var localEngine: LocalEngine
+  @Published var localBaseURL: String
+  @Published var localModelId: String
+  @Published var localAPIKey: String
+  @Published var openAICompatiblePreset: OpenAICompatiblePreset = .openRouter
+  @Published var openAICompatibleBaseURL: String = OpenAICompatibleConfiguration.openRouterBaseURL
+  @Published var openAICompatibleModelID: String = ""
+  @Published var openAICompatibleAPIKey: String = ""
   // CLI detection
   @Published var codexCLIStatus: CLIDetectionState = .unknown
   @Published var claudeCLIStatus: CLIDetectionState = .unknown
@@ -24,20 +30,51 @@ class ProviderSetupState: ObservableObject {
   @Published var debugCommandInput: String = "which codex"
   @Published var debugCommandOutput: String = ""
   @Published var isRunningDebugCommand: Bool = false
-  @Published var preferredCLITool: CLITool? = ProviderSetupState.loadStoredPreferredCLITool()
+  @Published var preferredCLITool: CLITool?
 
   var lastSavedGeminiModel: GeminiModel
   var hasStartedCLICheck = false
+  @Published private(set) var configuredProviderID: LLMProviderID?
+
   init() {
+    let defaults = UserDefaults.standard
+    let savedLocalEngine =
+      defaults.string(forKey: "llmLocalEngine").flatMap(LocalEngine.init(rawValue:)) ?? .lmstudio
+    let savedLocalBaseURL =
+      defaults.string(forKey: "llmLocalBaseURL")?
+      .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    let savedLocalModelID =
+      defaults.string(forKey: "llmLocalModelId")?
+      .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    self.localEngine = savedLocalEngine
+    self.localBaseURL =
+      savedLocalBaseURL.isEmpty
+      ? savedLocalEngine.defaultBaseURL : savedLocalBaseURL
+    self.localModelId =
+      savedLocalModelID.isEmpty
+      ? LocalModelPreferences.defaultModelId(for: savedLocalEngine) : savedLocalModelID
+    self.localAPIKey = defaults.string(forKey: "llmLocalAPIKey") ?? ""
+
     let preference = GeminiModelPreference.load()
     self.geminiModel = preference.primary
     self.lastSavedGeminiModel = preference.primary
+    self.preferredCLITool = nil
+
+    if let configuration = OpenAICompatiblePreferences.load() {
+      openAICompatiblePreset = configuration.preset
+      openAICompatibleBaseURL = configuration.baseURL
+      openAICompatibleModelID = configuration.modelID
+    }
+    openAICompatibleAPIKey =
+      KeychainManager.shared.retrieve(for: OpenAICompatiblePreferences.keychainProvider) ?? ""
   }
 
   var currentStep: SetupStep {
     guard currentStepIndex < steps.count else {
       return SetupStep(
-        id: "fallback", title: "Setup", contentType: .information("Complete", "Setup is complete"))
+        id: "fallback", title: String(localized: "Setup"),
+        contentType: .information(
+          String(localized: "Complete"), String(localized: "Setup is complete")))
     }
     return steps[currentStepIndex]
   }
@@ -45,7 +82,8 @@ class ProviderSetupState: ObservableObject {
   var canContinue: Bool {
     switch currentStep.contentType {
     case .apiKeyInput:
-      return !apiKey.isEmpty && apiKey.count > 20
+      let cleanedKey = apiKey.components(separatedBy: .whitespacesAndNewlines).joined()
+      return cleanedKey.count > 20 || (cleanedKey.isEmpty && hasStoredGeminiAPIKey)
     case .cliDetection:
       return isSelectedCLIToolReady
     case .information(_, _):
@@ -63,96 +101,171 @@ class ProviderSetupState: ObservableObject {
     return currentStepIndex == steps.count - 1
   }
 
-  func configureSteps(for provider: String) {
+  func configureSteps(for provider: LLMProviderID) {
+    configuredProviderID = provider
     switch provider {
-    case "ollama":
+    case .local:
       steps = [
         SetupStep(
           id: "intro",
-          title: "Before you begin",
+          title: String(localized: "Before you begin"),
           contentType: .information(
-            "For experienced users",
-            "This path is recommended only if you're comfortable running LLMs locally and debugging technical issues. If terms like vLLM or API endpoint don't ring a bell, we recommend going back and picking ChatGPT, Claude, or Gemini. It's non-technical and takes about 30 seconds.\n\nFor local mode, Dayflow recommends Qwen3-VL 4B as the core vision-language model (Qwen2.5-VL 3B remains available if you need a smaller download)."
+            String(localized: "For experienced users"),
+            String(
+              localized:
+                "This path is recommended only if you're comfortable running LLMs locally and debugging technical issues. If terms like vLLM or API endpoint don't ring a bell, we recommend going back and picking ChatGPT, Claude, or Gemini. It's non-technical and takes about 30 seconds.\n\nFor local mode, Dayflow recommends Qwen3-VL 4B as the core vision-language model (Qwen2.5-VL 3B remains available if you need a smaller download)."
+            )
           )
         ),
-        SetupStep(id: "choose", title: "Choose engine", contentType: .localChoice),
-        SetupStep(id: "model", title: "Install model", contentType: .localModelInstall),
         SetupStep(
-          id: "test", title: "Test connection",
+          id: "choose", title: String(localized: "Choose engine"), contentType: .localChoice),
+        SetupStep(
+          id: "model", title: String(localized: "Install model"), contentType: .localModelInstall),
+        SetupStep(
+          id: "test", title: String(localized: "Test connection"),
           contentType: .information(
-            "Test Connection",
-            "Click the button below to verify your local server responds to a simple chat completion."
+            String(localized: "Test Connection"),
+            String(
+              localized:
+                "Click the button below to verify your local server responds to a simple chat completion."
+            )
           )),
         SetupStep(
-          id: "complete", title: "Complete",
+          id: "complete", title: String(localized: "Complete"),
           contentType: .information(
-            "All set!", "Local AI is configured and ready to use with Dayflow.")),
+            String(localized: "All set!"),
+            String(localized: "Local AI is configured and ready to use with Dayflow."))),
       ]
-    case "chatgpt_claude":
-      preferredCLITool = ProviderSetupState.loadStoredPreferredCLITool()
-      steps = [
-        SetupStep(
-          id: "intro",
-          title: "Before you begin",
-          contentType: .information(
-            "Install Codex CLI (ChatGPT) or Claude Code",
-            "If you have a paid ChatGPT/Claude account, you can have Dayflow tap into your existing usage limits. Everything flows through your current account - no extra charges - and you can opt out of training for privacy. You only need one CLI installed and signed in on this Mac; we'll verify it automatically next."
-          )
-        ),
-        SetupStep(
-          id: "detect",
-          title: "Check installations",
-          contentType: .cliDetection
-        ),
-        SetupStep(
-          id: "test",
-          title: "Test connection",
-          contentType: .information(
-            "Test Connection",
-            "Run a quick test to verify your CLI is working and signed in."
-          )
-        ),
-        SetupStep(
-          id: "complete",
-          title: "Complete",
-          contentType: .information(
-            "All set!",
-            "ChatGPT and Claude tooling is ready. You can fine-tune which assistant to use anytime from Settings → AI Provider."
-          )
-        ),
-      ]
+    case .chatGPT, .claude:
+      preferredCLITool = provider == .claude ? .claude : .codex
+      steps = chatCLISteps(for: provider)
       codexCLIStatus = .unknown
       claudeCLIStatus = .unknown
       codexCLIReport = nil
       claudeCLIReport = nil
       isCheckingCLIStatus = false
       hasStartedCLICheck = false
-    default:  // gemini
+    case .openAICompatible:
       steps = [
         SetupStep(
-          id: "getkey", title: "Get API key",
+          id: "intro",
+          title: String(localized: "Configure endpoint"),
+          contentType: .information(
+            String(localized: "Connect an OpenAI-compatible endpoint"),
+            String(
+              localized:
+                "Use OpenRouter or another endpoint that supports OpenAI Chat Completions with image input. The connection test sends one image and may incur a small provider charge."
+            )
+          )
+        ),
+        SetupStep(
+          id: "test",
+          title: String(localized: "Test connection"),
+          contentType: .information(
+            String(localized: "Test Connection"),
+            String(
+              localized:
+                "Enter the endpoint, model, and API key, then verify a multimodal response.")
+          )
+        ),
+        SetupStep(
+          id: "complete",
+          title: String(localized: "Complete"),
+          contentType: .information(
+            String(localized: "All set!"),
+            String(localized: "Your OpenAI-compatible provider is ready to use with Dayflow.")
+          )
+        ),
+      ]
+    case .gemini, .dayflow:
+      let storedGeminiKey =
+        KeychainManager.shared.retrieve(for: "gemini")?
+        .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+      hasStoredGeminiAPIKey = !storedGeminiKey.isEmpty
+      steps = [
+        SetupStep(
+          id: "getkey", title: String(localized: "Get API key"),
           contentType: .apiKeyInstructions),
         SetupStep(
-          id: "enterkey", title: "Enter API key",
+          id: "enterkey", title: String(localized: "Enter API key"),
           contentType: .apiKeyInput),
         SetupStep(
-          id: "verify", title: "Test connection",
+          id: "verify", title: String(localized: "Test connection"),
           contentType: .information(
-            "Test Connection", "Click the button below to verify your API key works with Gemini")),
+            String(localized: "Test Connection"),
+            String(localized: "Click the button below to verify your API key works with Gemini"))),
         SetupStep(
-          id: "complete", title: "Complete",
+          id: "complete", title: String(localized: "Complete"),
           contentType: .information(
-            "All set!", "Gemini is now configured and ready to use with Dayflow.")),
+            String(localized: "All set!"),
+            String(localized: "Gemini is now configured and ready to use with Dayflow."))),
       ]
     }
   }
 
-  func goNext() {
-    // Save API key to keychain when moving from API key input step
-    if currentStep.contentType.isApiKeyInput && !apiKey.isEmpty {
-      guard persistGeminiAPIKey(source: "onboarding_step") else { return }
-    }
+  private func chatCLISteps(for provider: LLMProviderID) -> [SetupStep] {
+    let isClaude = provider == .claude
+    let providerName = isClaude ? "Claude" : "ChatGPT"
+    let cliName = isClaude ? "Claude Code" : "Codex CLI"
+    return [
+      SetupStep(
+        id: "intro",
+        title: String(localized: "Before you begin"),
+        contentType: .information(
+          "",
+          String(
+            localized:
+              "Dayflow uses \(cliName) through your existing \(providerName) subscription. Install it and sign in on this Mac, then we'll verify the connection."
+          )
+        )
+      ),
+      SetupStep(
+        id: "detect",
+        title: String(localized: "Check installations"),
+        contentType: .cliDetection
+      ),
+      SetupStep(
+        id: "test",
+        title: String(localized: "Test connection"),
+        contentType: .information(
+          String(localized: "Test Connection"),
+          String(localized: "Run a quick test to verify your CLI is working and signed in.")
+        )
+      ),
+      SetupStep(
+        id: "complete",
+        title: String(localized: "Complete"),
+        contentType: .information(
+          String(localized: "All set!"),
+          String(localized: "\(providerName) is configured and ready to use with Dayflow.")
+        )
+      ),
+    ]
+  }
 
+  /// Swap the active chat-CLI provider mid-flow (e.g. user picked ChatGPT but selects
+  /// Claude on the detection step). Rewrites the step copy in place without resetting
+  /// detection results or the user's position in the flow.
+  private func switchChatCLIProvider(to provider: LLMProviderID) {
+    guard configuredProviderID == .chatGPT || configuredProviderID == .claude,
+      provider == .chatGPT || provider == .claude,
+      provider != configuredProviderID
+    else { return }
+    configuredProviderID = provider
+    let refreshedSteps = chatCLISteps(for: provider)
+    for (index, refreshed) in refreshedSteps.enumerated() where index < steps.count {
+      var step = refreshed
+      if steps[index].isCompleted {
+        step.markCompleted()
+      }
+      steps[index] = step
+    }
+    // The connection test targets the selected CLI, so a switch invalidates it
+    hasTestedConnection = false
+    testSuccessful = false
+  }
+
+  func goNext() {
     if currentStepIndex < steps.count - 1 {
       currentStepIndex += 1
     }
@@ -166,9 +279,6 @@ class ProviderSetupState: ObservableObject {
 
   func navigateToStep(_ stepId: String) {
     if let index = steps.firstIndex(where: { $0.id == stepId }) {
-      if currentStep.contentType.isApiKeyInput && stepId != currentStep.id {
-        guard persistGeminiAPIKey(source: "onboarding_sidebar") else { return }
-      }
       // Reset test state when navigating to test step
       if stepId == "verify" || stepId == "test" {
         hasTestedConnection = false
@@ -188,7 +298,6 @@ class ProviderSetupState: ObservableObject {
   func persistGeminiModelSelection(source: String) {
     guard geminiModel != lastSavedGeminiModel else { return }
     lastSavedGeminiModel = geminiModel
-    GeminiModelPreference(primary: geminiModel).save()
 
     Task { @MainActor in
       AnalyticsService.shared.capture(
@@ -206,31 +315,6 @@ class ProviderSetupState: ObservableObject {
 
   func clearGeminiAPIKeySaveError() {
     geminiAPIKeySaveError = nil
-  }
-
-  @discardableResult
-  func persistGeminiAPIKey(source: String) -> Bool {
-    let cleaned = apiKey.components(separatedBy: .whitespacesAndNewlines).joined()
-    guard !cleaned.isEmpty else {
-      geminiAPIKeySaveError = nil
-      return true
-    }
-
-    if cleaned != apiKey {
-      apiKey = cleaned
-    }
-
-    let stored = KeychainManager.shared.store(cleaned, for: "gemini")
-    if stored {
-      geminiAPIKeySaveError = nil
-      hasTestedConnection = false
-      testSuccessful = false
-      persistGeminiModelSelection(source: source)
-    } else {
-      geminiAPIKeySaveError =
-        "Couldn't save your API key to Keychain. Please unlock Keychain and try again."
-    }
-    return stored
   }
 
   var isSelectedCLIToolReady: Bool {
@@ -303,32 +387,23 @@ class ProviderSetupState: ObservableObject {
   }
 
   func selectPreferredCLITool(_ tool: CLITool) {
-    guard isToolAvailable(tool) else { return }
+    guard preferredCLITool != tool else { return }
     preferredCLITool = tool
-    persistPreferredCLITool()
+    switchChatCLIProvider(to: tool == .claude ? .claude : .chatGPT)
     captureChatCLIToolSelected(tool)
   }
 
-  func persistPreferredCLITool() {
-    guard let tool = preferredCLITool else {
-      UserDefaults.standard.removeObject(forKey: Self.cliPreferenceKey)
-      return
-    }
-    UserDefaults.standard.set(tool.rawValue, forKey: Self.cliPreferenceKey)
-  }
-
   func ensurePreferredCLIToolIsValid() {
-    if let current = preferredCLITool, isToolAvailable(current) {
+    // Keep an explicit selection even if that CLI isn't installed yet — the
+    // Next button stays disabled until it's detected.
+    if preferredCLITool != nil {
       return
     }
     if isToolAvailable(.codex) {
       preferredCLITool = .codex
     } else if isToolAvailable(.claude) {
       preferredCLITool = .claude
-    } else {
-      preferredCLITool = nil
     }
-    persistPreferredCLITool()
   }
 
   func captureChatCLIDetectionChecked(source: String) {
@@ -362,6 +437,7 @@ class ProviderSetupState: ObservableObject {
 
     return [
       "source": source,
+      "provider_id": configuredProviderID?.rawValue ?? "unknown",
       "setup_step": "detect",
       "selected_tool": selectedTool?.rawValue ?? "none",
       "selected_tool_available": selectedToolAvailable,
@@ -400,15 +476,6 @@ class ProviderSetupState: ObservableObject {
       return claudeCLIReport?.resolvedPath != nil
     }
   }
-
-  static func loadStoredPreferredCLITool() -> CLITool? {
-    guard let raw = UserDefaults.standard.string(forKey: Self.cliPreferenceKey) else {
-      return nil
-    }
-    return CLITool(rawValue: raw)
-  }
-
-  static let cliPreferenceKey = "chatCLIPreferredTool"
 
 }
 
@@ -451,20 +518,20 @@ enum StepContentType {
 extension ProviderSetupState {
   @MainActor func selectEngine(_ engine: LocalEngine) {
     localEngine = engine
+    hasTestedConnection = false
+    testSuccessful = false
     if engine != .custom {
       localBaseURL = engine.defaultBaseURL
     }
     let defaultModel = LocalModelPreferences.defaultModelId(
       for: engine == .custom ? .ollama : engine)
     localModelId = defaultModel
-    LocalModelPreferences.syncPreset(for: engine, modelId: defaultModel)
 
     // Track local engine selection for analytics
     AnalyticsService.shared.capture(
       "local_engine_selected",
       [
         "engine": engine.rawValue,
-        "base_url": localBaseURL,
         "default_model": defaultModel,
         "has_api_key": !localAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
       ])

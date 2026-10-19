@@ -5,9 +5,12 @@ import SwiftUI
 enum LocalLLMTestConstants {
   static let blankImageDataURL = LocalLLMTestImageFactory.blankImageDataURL(
     width: 1280, height: 720)
-  static let prompt = "What color is this image? Answer with a single word."
+  static let prompt = String(localized: "What color is this image? Answer with a single word.")
   static let slowMachineMessage =
-    "It took longer than 30 seconds, so your machine doesn't appear powerful enough to run this model locally."
+    String(
+      localized:
+        "It took longer than 30 seconds, so your machine doesn't appear powerful enough to run this model locally."
+    )
   static let maxLatency: TimeInterval = 30
 }
 
@@ -61,6 +64,9 @@ struct LocalLLMTestView: View {
   let buttonLabel: String
   let basePlaceholder: String?
   let modelPlaceholder: String?
+  let credentialStorageDescription: String
+  let requiresMeaningfulResponse: Bool
+  let enforcesLocalLatencyLimit: Bool
   let onTestComplete: (Bool) -> Void
 
   init(
@@ -69,9 +75,15 @@ struct LocalLLMTestView: View {
     apiKey: Binding<String> = .constant(""),
     engine: LocalEngine,
     showInputs: Bool = true,
-    buttonLabel: String = "Test Local API",
+    buttonLabel: String = String(localized: "Test Local API"),
     basePlaceholder: String? = nil,
     modelPlaceholder: String? = nil,
+    credentialStorageDescription: String =
+      String(
+        localized: "Stored locally in UserDefaults and sent as a Bearer token for custom endpoints."
+      ),
+    requiresMeaningfulResponse: Bool = false,
+    enforcesLocalLatencyLimit: Bool = true,
     onTestComplete: @escaping (Bool) -> Void
   ) {
     _baseURL = baseURL
@@ -82,6 +94,9 @@ struct LocalLLMTestView: View {
     self.buttonLabel = buttonLabel
     self.basePlaceholder = basePlaceholder
     self.modelPlaceholder = modelPlaceholder
+    self.credentialStorageDescription = credentialStorageDescription
+    self.requiresMeaningfulResponse = requiresMeaningfulResponse
+    self.enforcesLocalLatencyLimit = enforcesLocalLatencyLimit
     self.onTestComplete = onTestComplete
   }
 
@@ -127,24 +142,22 @@ struct LocalLLMTestView: View {
             SecureField("sk-live-...", text: $apiKey)
               .textFieldStyle(.roundedBorder)
               .disableAutocorrection(true)
-            Text(
-              "Stored locally in UserDefaults and sent as a Bearer token for custom endpoints (LiteLLM, OpenRouter, etc.)"
-            )
-            .font(.custom("Figtree", size: 11))
-            .foregroundColor(SettingsStyle.meta)
+            Text(credentialStorageDescription)
+              .font(.custom("Figtree", size: 11))
+              .foregroundColor(SettingsStyle.meta)
           }
         }
       }
 
       SettingsPrimaryButton(
-        title: isTesting ? "Testing…" : buttonLabel,
+        title: isTesting ? String(localized: "Testing…") : buttonLabel,
         systemImage: "bolt.fill",
         isLoading: isTesting,
         action: runTest
       )
 
       if success {
-        SettingsStatusDot(state: .good, label: "Test successful.")
+        SettingsStatusDot(state: .good, label: String(localized: "Test successful."))
       } else if let msg = resultMessage {
         VStack(alignment: .leading, spacing: 6) {
           SettingsStatusDot(state: .bad, label: msg)
@@ -165,7 +178,7 @@ struct LocalLLMTestView: View {
     resultMessage = nil
 
     guard let url = LocalEndpointUtilities.chatCompletionsURL(baseURL: baseURL) else {
-      resultMessage = "Invalid base URL"
+      resultMessage = String(localized: "Invalid base URL")
       isTesting = false
       onTestComplete(false)
       return
@@ -204,7 +217,7 @@ struct LocalLLMTestView: View {
     URLSession.shared.dataTask(with: request) { data, response, error in
       DispatchQueue.main.async {
         let duration = Date().timeIntervalSince(startedAt)
-        if duration > LocalLLMTestConstants.maxLatency {
+        if enforcesLocalLatencyLimit && duration > LocalLLMTestConstants.maxLatency {
           self.resultMessage = LocalLLMTestConstants.slowMachineMessage
           self.success = false
           self.isTesting = false
@@ -218,13 +231,25 @@ struct LocalLLMTestView: View {
           return
         }
         guard let http = response as? HTTPURLResponse, let data = data else {
-          self.resultMessage = "No response"
+          self.resultMessage = String(localized: "No response")
           self.isTesting = false
           self.onTestComplete(false)
           return
         }
         if http.statusCode == 200 {
-          // Success: don't print raw response body; keep UI clean
+          if requiresMeaningfulResponse {
+            let decoded = try? JSONDecoder().decode(OllamaProvider.ChatResponse.self, from: data)
+            let content = decoded?.choices.first?.message.content.trimmingCharacters(
+              in: .whitespacesAndNewlines)
+            guard let content, !content.isEmpty else {
+              self.resultMessage = String(
+                localized: "The endpoint returned an empty or unsupported response.")
+              self.success = false
+              self.isTesting = false
+              self.onTestComplete(false)
+              return
+            }
+          }
           self.resultMessage = nil
           self.success = true
           self.isTesting = false

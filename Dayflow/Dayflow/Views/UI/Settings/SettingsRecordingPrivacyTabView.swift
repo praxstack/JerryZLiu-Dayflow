@@ -15,8 +15,8 @@ struct SettingsRecordingPrivacyTabView: View {
       idleCaptureSection
 
       SettingsSection(
-        title: "Recording privacy",
-        subtitle: "Choose apps Dayflow should hide from screenshots."
+        title: String(localized: "Recording privacy"),
+        subtitle: String(localized: "Choose apps Dayflow should hide from screenshots.")
       ) {
         VStack(alignment: .leading, spacing: 18) {
           searchField
@@ -26,7 +26,6 @@ struct SettingsRecordingPrivacyTabView: View {
         }
         .frame(maxHeight: .infinity, alignment: .topLeading)
       }
-      .frame(maxHeight: .infinity, alignment: .topLeading)
     }
     .frame(maxHeight: .infinity, alignment: .topLeading)
     .onAppear {
@@ -42,7 +41,7 @@ struct SettingsRecordingPrivacyTabView: View {
       SettingsRow(
         label: "Slow down capture when idle",
         subtitle:
-          "After 2 minutes without keyboard or mouse input, Dayflow takes screenshots less often to save disk space and battery.",
+          "After 1 minute without keyboard or mouse input, Dayflow takes screenshots less often to save disk space and battery.",
         showsDivider: false
       ) {
         SettingsToggle(isOn: $viewModel.idleCaptureThrottleEnabled)
@@ -84,9 +83,9 @@ struct SettingsRecordingPrivacyTabView: View {
         Spacer()
 
         if viewModel.isLoadingApplications {
-          SettingsMetadata(text: "Loading apps...")
+          SettingsMetadata(text: String(localized: "Loading apps..."))
         } else {
-          SettingsMetadata(text: "\(viewModel.filteredApplications.count) shown")
+          SettingsMetadata(text: String(localized: "\(viewModel.filteredApplications.count) shown"))
         }
       }
 
@@ -144,12 +143,12 @@ struct SettingsRecordingPrivacyTabView: View {
           .fontWeight(.semibold)
           .foregroundColor(SettingsStyle.text)
 
-        SettingsMetadata(text: "\(viewModel.blockedApplications.count) blocked")
+        SettingsMetadata(text: String(localized: "\(viewModel.blockedApplications.count) blocked"))
 
         Spacer()
 
         SettingsSecondaryButton(
-          title: "Clear",
+          title: String(localized: "Clear"),
           isDisabled: viewModel.blockedApplications.isEmpty,
           action: viewModel.clearBlockedApplications
         )

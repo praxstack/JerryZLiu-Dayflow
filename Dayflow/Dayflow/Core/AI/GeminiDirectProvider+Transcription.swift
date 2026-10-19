@@ -143,6 +143,7 @@ extension GeminiDirectProvider {
         if hasValidationErrors {
           AnalyticsService.shared.captureValidationFailure(
             provider: "gemini",
+            providerID: .gemini,
             operation: "transcribe",
             validationType: "timestamp_exceeds_duration",
             attempt: attempt + 1,
@@ -162,6 +163,7 @@ extension GeminiDirectProvider {
         if observations.isEmpty {
           AnalyticsService.shared.captureValidationFailure(
             provider: "gemini",
+            providerID: .gemini,
             operation: "transcribe",
             validationType: "empty_observations",
             attempt: attempt + 1,
@@ -274,11 +276,11 @@ extension GeminiDirectProvider {
     ]
 
     let generationConfig: [String: Any] = [
-      "temperature": 0.3,
       "maxOutputTokens": 65536,
       "mediaResolution": "MEDIA_RESOLUTION_HIGH",
       "responseMimeType": "application/json",
       "responseSchema": transcriptionSchema,
+      "thinkingConfig": ["thinkingLevel": "high"],
     ]
 
     let requestBody: [String: Any] = [
@@ -331,6 +333,7 @@ extension GeminiDirectProvider {
         callGroupId: groupId,
         attempt: attempt,
         provider: "gemini",
+        providerID: LLMProviderID.gemini.rawValue,
         model: modelName,
         operation: "transcribe",
         requestMethod: request.httpMethod,
@@ -496,6 +499,7 @@ extension GeminiDirectProvider {
           callGroupId: groupId,
           attempt: attempt,
           provider: "gemini",
+          providerID: LLMProviderID.gemini.rawValue,
           model: modelName,
           operation: "transcribe",
           requestMethod: request.httpMethod,
@@ -650,8 +654,11 @@ extension GeminiDirectProvider {
     // Compressed video duration: 1 second per screenshot
     let compressedVideoDuration = TimeInterval(sortedScreenshots.count)
 
-    // Compression factor = screenshot interval (e.g., 10s screenshots → 10x compression)
-    let compressionFactor = ScreenshotConfig.interval
+    // Compression factor = average real seconds per frame (each frame is 1s of video)
+    let compressionFactor =
+      sortedScreenshots.count > 1 && realDuration > 0
+      ? realDuration / TimeInterval(sortedScreenshots.count - 1)
+      : ScreenshotConfig.interval
 
     print(
       "[Gemini] 📊 Timeline compression: \(Int(realDuration))s real → \(Int(compressedVideoDuration))s video (\(Int(compressionFactor))x)"

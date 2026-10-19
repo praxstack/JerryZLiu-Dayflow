@@ -12,9 +12,9 @@ struct WeeklyHighlightsSection: View {
   private enum Design {
     static let width: CGFloat = 470
     static let height: CGFloat = 298
-    static let borderColor = Color(hex: "EBE6E3")
-    static let background = Color.white.opacity(0.6)
-    static let titleColor = Color(hex: "B46531")
+    static let borderColor = WeeklyPalette.cardBorder
+    @MainActor static var background: Color { WeeklyPalette.cardFill }
+    static let titleColor = WeeklyPalette.title
   }
 
   var body: some View {
@@ -28,21 +28,21 @@ struct WeeklyHighlightsSection: View {
           HStack(alignment: .top, spacing: 18) {
             Text(highlight.tag)
               .font(.custom("Figtree-SemiBold", size: 8))
-              .foregroundStyle(Color(hex: "DF8351"))
+              .foregroundStyle(WeeklyPalette.accent)
               .lineLimit(1)
               .padding(.horizontal, 6)
               .padding(.vertical, 4)
-              .background(Color(hex: "FFECE0"))
+              .background(WeeklyPalette.highlightChipFill)
               .overlay(
                 RoundedRectangle(cornerRadius: 3, style: .continuous)
-                  .stroke(Color.white, lineWidth: 1)
+                  .stroke(WeeklyPalette.cardInnerStroke, lineWidth: 1)
               )
               .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
               .frame(width: 84, alignment: .leading)
 
             Text(highlight.text)
               .font(.custom("Figtree-Regular", size: 12))
-              .foregroundStyle(Color(hex: "333333"))
+              .foregroundStyle(WeeklyPalette.text)
               .lineSpacing(1)
               .frame(maxWidth: .infinity, alignment: .leading)
           }
@@ -73,19 +73,28 @@ struct WeeklyHighlightsSnapshot {
         id: "editorial-nls",
         tag: "EDITORIAL NLS",
         text:
-          "Iterated on ZSR and sparse results design explorations (zero-result states, best match redirects, query rephrasing guidance)"
+          String(
+            localized:
+              "Iterated on ZSR and sparse results design explorations (zero-result states, best match redirects, query rephrasing guidance)"
+          )
       ),
       WeeklyHighlight(
         id: "editorial-video-nls",
         tag: "EDITORIAL VIDEO NLS",
         text:
-          "Conducted competitive analysis of NLS video search tools (TwelveLabs, WayinVideo, AP Moments, YouTube Ask) during Pod 1 Review"
+          String(
+            localized:
+              "Conducted competitive analysis of NLS video search tools (TwelveLabs, WayinVideo, AP Moments, YouTube Ask) during Pod 1 Review"
+          )
       ),
       WeeklyHighlight(
         id: "editorial-sbi",
         tag: "EDITORIAL SBI",
         text:
-          "Reviewed scope-switching and SBI handling flows; drafted \"Areas requiring additional PD input\" spec with ClickUp links; synced with Jason Ross on SBI UX details"
+          String(
+            localized:
+              "Reviewed scope-switching and SBI handling flows; drafted \"Areas requiring additional PD input\" spec with ClickUp links; synced with Jason Ross on SBI UX details"
+          )
       ),
     ]
   )
@@ -100,5 +109,5 @@ struct WeeklyHighlight: Identifiable {
 #Preview("Top Highlights", traits: .fixedLayout(width: 470, height: 298)) {
   WeeklyHighlightsSection(snapshot: .figmaPreview)
     .padding(24)
-    .background(Color(hex: "FBF6EF"))
+    .background(WeeklyPalette.canvas)
 }

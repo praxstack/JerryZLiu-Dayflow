@@ -16,9 +16,9 @@ final class IdleCaptureIntervalTests: XCTestCase {
   func testBelowThresholdStaysAtBaseInterval() {
     let interval = IdleCaptureInterval.interval(
       baseInterval: 10,
-      idleThrottledInterval: 30,
-      idleSeconds: 119,
-      idleThresholdSeconds: 120
+      idleThrottledInterval: IdleCaptureDefaults.throttledIntervalSeconds,
+      idleSeconds: Int(IdleCaptureDefaults.idleThresholdSeconds) - 1,
+      idleThresholdSeconds: IdleCaptureDefaults.idleThresholdSeconds
     )
     XCTAssertEqual(interval, 10)
   }
@@ -26,21 +26,21 @@ final class IdleCaptureIntervalTests: XCTestCase {
   func testAtThresholdSwitchesToThrottledInterval() {
     let interval = IdleCaptureInterval.interval(
       baseInterval: 10,
-      idleThrottledInterval: 30,
-      idleSeconds: 120,
-      idleThresholdSeconds: 120
+      idleThrottledInterval: IdleCaptureDefaults.throttledIntervalSeconds,
+      idleSeconds: Int(IdleCaptureDefaults.idleThresholdSeconds),
+      idleThresholdSeconds: IdleCaptureDefaults.idleThresholdSeconds
     )
-    XCTAssertEqual(interval, 30)
+    XCTAssertEqual(interval, IdleCaptureDefaults.throttledIntervalSeconds)
   }
 
   func testLongIdleStaysAtThrottledInterval() {
     let interval = IdleCaptureInterval.interval(
       baseInterval: 10,
-      idleThrottledInterval: 30,
+      idleThrottledInterval: IdleCaptureDefaults.throttledIntervalSeconds,
       idleSeconds: 3600,
-      idleThresholdSeconds: 120
+      idleThresholdSeconds: IdleCaptureDefaults.idleThresholdSeconds
     )
-    XCTAssertEqual(interval, 30)
+    XCTAssertEqual(interval, IdleCaptureDefaults.throttledIntervalSeconds)
   }
 
   func testNilIdleSecondsGetsBaseInterval() {
@@ -143,12 +143,66 @@ final class IdleCaptureIntervalTests: XCTestCase {
   }
 
   func testDisabledPreferenceAlwaysReturnsBaseInterval() {
-    let interval = IdleCaptureInterval.interval(
-      baseInterval: 10,
-      idleThrottledInterval: 10,  // caller passes base==throttled when disabled
-      idleSeconds: 600,
-      idleThresholdSeconds: 120
+    XCTAssertEqual(
+      IdleCaptureInterval.effectiveInterval(baseInterval: 10, idleSeconds: 600, throttleEnabled: false),
+      10
     )
-    XCTAssertEqual(interval, 10)
+  }
+
+  // MARK: - IdleBatchClassifier integration
+
+  private func screenshotsForSimulatedIdleBatch(
+    batchStart: Int,
+    batchEnd: Int,
+    blipAt: Int? = nil
+  ) -> [Screenshot] {
+    var shots: [Screenshot] = []
+    var lastInputAt = batchStart - 10_000
+    var t = batchStart
+    var id: Int64 = 1
+    while t <= batchEnd {
+      if blipAt == t {
+        lastInputAt = t - 1
+      }
+      let idleSeconds = t - lastInputAt
+      shots.append(
+        Screenshot(
+          id: id,
+          capturedAt: t,
+          filePath: "sim.hevc",
+          fileSize: 1,
+          idleSecondsAtCapture: idleSeconds,
+          isDeleted: false
+        )
+      )
+      id += 1
+      let step = Int(
+        IdleCaptureInterval.interval(
+          baseInterval: 10,
+          idleThrottledInterval: IdleCaptureDefaults.throttledIntervalSeconds,
+          idleSeconds: idleSeconds,
+          idleThresholdSeconds: IdleCaptureDefaults.idleThresholdSeconds
+        ))
+      t += max(1, step)
+    }
+    return shots
+  }
+
+  func testSimulatedThrottledIdleBatchPassesIdleBatchClassifier() {
+    let batchStart = 0
+    let batchEnd = 15 * 60
+    let shots = screenshotsForSimulatedIdleBatch(batchStart: batchStart, batchEnd: batchEnd)
+    XCTAssertNotNil(IdleBatchClassifier.assess(shots))
+  }
+
+  func testSimulatedThrottledIdleBatchWithBlipStillClassifiesAsIdle() {
+    let batchStart = 0
+    let batchEnd = 15 * 60
+    let blip = Int(IdleCaptureDefaults.throttledIntervalSeconds) * 6
+    let shots = screenshotsForSimulatedIdleBatch(batchStart: batchStart, batchEnd: batchEnd, blipAt: blip)
+    XCTAssertNotNil(
+      IdleBatchClassifier.assess(shots),
+      "post-blip batch should still meet qualified-idle and coverage thresholds"
+    )
   }
 }

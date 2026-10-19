@@ -16,6 +16,8 @@ struct MainView: View {
   @EnvironmentObject var appState: AppState
   @EnvironmentObject var categoryStore: CategoryStore
   @Environment(\.accessibilityReduceMotion) var reduceMotion
+  @Environment(\.dayflowTheme) var theme
+  @Environment(\.stylePreviewAfter) var stylePreviewAfter
   @State var selectedIcon: SidebarIcon = .timeline
   @State var selectedDate = timelineDisplayDate(from: Date())
   @State var cachedTimelineWeekRange: TimelineWeekRange = TimelineWeekRange.containing(
@@ -59,6 +61,9 @@ struct MainView: View {
   @State var lastObservedTimelineDay: String = cachedDayStringFormatter.string(
     from: timelineDisplayDate(from: Date()))
   @State var showCategoryEditor = false
+  // Categories the user turned off in the chip row (keys from categoryFilterKey).
+  // Session-only on purpose: their cards are dimmed, not hidden.
+  @State var mutedCategoryKeys: Set<String> = []
   @State var feedbackModalVisible = false
   @State var feedbackMessage: String = ""
   @State var feedbackShareLogs = true
@@ -83,6 +88,8 @@ struct MainView: View {
   @State var timelineFailureToastPayload: TimelineFailureToastPayload?
   @State var showScreenRecordingPermissionNotice = false
   @State var didDismissScreenRecordingPermissionNoticeThisSession = false
+  /// macOS says access is granted, but the recorder gave up after captures kept failing.
+  @State var screenCaptureIsFailing = false
   @State var pendingGoalPromptDay: String?
   @Binding var goalFlowPresentation: DayGoalFlowPresentation?
 
@@ -103,6 +110,9 @@ struct MainView: View {
 
   var body: some View {
     mainLayout
+      .onReceive(NotificationCenter.default.publisher(for: .navigateToSupport)) { _ in
+        selectedIcon = .bug
+      }
       .onReceive(NotificationCenter.default.publisher(for: .navigateToDaily)) { notification in
         let wasAlreadyOnDaily = selectedIcon == .daily
         if let dayString = notification.userInfo?["day"] as? String,
@@ -115,6 +125,18 @@ struct MainView: View {
         }
         withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) {
           selectedIcon = .daily
+        }
+      }
+      .onReceive(NotificationCenter.default.publisher(for: .navigateToTimeline)) { _ in
+        selectedActivity = nil
+        setSelectedDate(timelineDisplayDate(from: Date()))
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) {
+          selectedIcon = .timeline
+        }
+      }
+      .onReceive(NotificationCenter.default.publisher(for: .navigateToFlow)) { _ in
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) {
+          selectedIcon = .flow
         }
       }
   }

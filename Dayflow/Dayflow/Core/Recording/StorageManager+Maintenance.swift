@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import GRDB
 import Sentry
@@ -42,6 +43,9 @@ extension StorageManager {
 
   /// Opens the database with automatic recovery from backup if corrupted.
   /// Order of attempts: 1) Normal open, 2) Restore from most recent backup, 3) Fresh database
+  /// Recovery only runs for corruption errors. Environmental failures (disk full,
+  /// file locked/permissions) leave an intact database on disk — deleting it would
+  /// destroy user data — so those show an alert and quit instead.
   static func openDatabaseSafely(
     at dbURL: URL,
     backupsDir: URL,
@@ -60,6 +64,10 @@ extension StorageManager {
       breadcrumb.message = "Database open failed, attempting recovery"
       breadcrumb.data = ["error": "\(error)"]
       SentryHelper.addBreadcrumb(breadcrumb)
+
+      guard isCorruptionError(error) else {
+        showDatabaseUnavailableAlertAndQuit(error: error)
+      }
 
       // Attempt 2: Restore from most recent backup
       if let backupURL = findMostRecentBackup(in: backupsDir, fileManager: fileManager) {
@@ -106,10 +114,57 @@ extension StorageManager {
 
         return pool
       } catch {
-        // This is truly fatal - can't even create a fresh database
-        fatalError("[StorageManager] Cannot create database: \(error)")
+        // Even a fresh database can't be created — the environment is broken.
+        showDatabaseUnavailableAlertAndQuit(error: error)
       }
     }
+  }
+
+  /// True only for SQLite errors that mean the database file itself is damaged.
+  /// Everything else (disk full, unable to open, I/O errors) is environmental.
+  private static func isCorruptionError(_ error: Error) -> Bool {
+    guard let dbError = error as? DatabaseError else { return false }
+    let primary = dbError.resultCode.primaryResultCode
+    return primary == .SQLITE_CORRUPT || primary == .SQLITE_NOTADB
+  }
+
+  /// Tells the user the database is unavailable (most commonly a full disk) and
+  /// quits cleanly instead of crashing.
+  private static func showDatabaseUnavailableAlertAndQuit(error: Error) -> Never {
+    if SentryHelper.isEnabled {
+      SentrySDK.capture(message: "Database unavailable, quitting: \(error)")
+      SentrySDK.flush(timeout: 2)
+    }
+
+    let presentAlert = {
+      let alert = NSAlert()
+      alert.alertStyle = .critical
+      alert.messageText = String(localized: "Dayflow Can't Open Its Database")
+      alert.informativeText = String(
+        localized: """
+          Dayflow couldn't open its database and has to quit. This usually happens \
+          when the disk is full — free up some space and open Dayflow again.
+
+          Error: \(error)
+          """)
+      alert.addButton(withTitle: String(localized: "Quit"))
+      alert.runModal()
+    }
+
+    if Thread.isMainThread {
+      presentAlert()
+    } else {
+      // StorageManager.shared can be first touched from a background thread while
+      // the main thread is blocked waiting on the same init — a sync hop would
+      // deadlock. Show the alert async and time out if it never gets dismissed.
+      let dismissed = DispatchSemaphore(value: 0)
+      DispatchQueue.main.async {
+        presentAlert()
+        dismissed.signal()
+      }
+      _ = dismissed.wait(timeout: .now() + 60)
+    }
+    exit(1)
   }
 
   /// Finds the most recent backup file in the backups directory
@@ -385,69 +440,43 @@ extension StorageManager {
       // Check current size after cleaning orphans
       let currentSize = try fileMgr.allocatedSizeOfDirectory(at: root)
 
-      // Clean up if above limit
+      // Soft-delete whole segments, oldest first, until the estimated size fits.
+      // Files are removed by cleanupRecordingStragglers once none of their frames are live.
       if currentSize > limit {
+        let activeSegmentPath = FrameStore.shared.activeSegmentPath
         var freedSpace: Int64 = 0
         var passCount = 0
 
         while currentSize - freedSpace > limit {
-          var deletedThisPass = 0
           var freedThisPass: Int64 = 0
+          var markedThisPass = 0
 
           try timedWrite("purgeScreenshots") { db in
-            // Get oldest active screenshots
-            let oldScreenshots = try Row.fetchAll(
+            let oldSegments = try Row.fetchAll(
               db,
               sql: """
-                    SELECT id, file_path, file_size
+                    SELECT file_path, SUM(file_size) AS bytes
                     FROM screenshots
                     WHERE is_deleted = 0
-                    ORDER BY captured_at ASC
-                    LIMIT 500
+                    GROUP BY file_path
+                    ORDER BY MIN(captured_at) ASC
+                    LIMIT 20
                 """)
 
-            guard !oldScreenshots.isEmpty else { return }
-
-            for screenshot in oldScreenshots {
-              guard let id: Int64 = screenshot["id"],
-                let path: String = screenshot["file_path"]
-              else { continue }
-
-              // Mark as deleted in DB first (safer ordering)
-              try db.execute(
-                sql: """
-                      UPDATE screenshots
-                      SET is_deleted = 1
-                      WHERE id = ?
-                  """, arguments: [id])
-
-              // Then delete physical file
-              if fileMgr.fileExists(atPath: path) {
-                var fileSize: Int64 = 0
-                if let storedSize: Int64 = screenshot["file_size"] {
-                  fileSize = storedSize
-                }
-                if fileSize == 0,
-                  let attrs = try? fileMgr.attributesOfItem(atPath: path),
-                  let size = attrs[.size] as? NSNumber
-                {
-                  fileSize = size.int64Value
-                }
-
-                do {
-                  try fileMgr.removeItem(atPath: path)
-                  freedThisPass += fileSize
-                  deletedThisPass += 1
-                } catch {
-                  print("⚠️ Failed to delete screenshot at \(path): \(error)")
-                }
-              } else {
-                deletedThisPass += 1
+            for segment in oldSegments {
+              guard let path: String = segment["file_path"], path != activeSegmentPath else {
+                continue
               }
+              let bytes: Int64? = segment["bytes"]
+              try db.execute(
+                sql: "UPDATE screenshots SET is_deleted = 1 WHERE file_path = ? AND is_deleted = 0",
+                arguments: [path])
+              freedThisPass += bytes ?? 0
+              markedThisPass += 1
             }
           }
 
-          if deletedThisPass == 0 {
+          if markedThisPass == 0 {
             break
           }
 
@@ -468,6 +497,8 @@ extension StorageManager {
 
   func cleanupRecordingStragglers() {
     // Delete any recordings that are not referenced by active screenshots.
+    // Read the active segment before the row snapshot so a segment opened in between is covered.
+    let activeSegmentPath = FrameStore.shared.activeSegmentPath
     let activeScreenshotPaths: Set<String> = Set(
       (try? timedRead("activeScreenshotPaths") { db in
         try Row.fetchAll(
@@ -484,17 +515,25 @@ extension StorageManager {
     guard
       let enumerator = fileMgr.enumerator(
         at: root,
-        includingPropertiesForKeys: [.isDirectoryKey],
+        includingPropertiesForKeys: [.isDirectoryKey, .contentModificationDateKey],
         options: [.skipsHiddenFiles]
       )
     else { return }
 
     let deleteAll = activeScreenshotPaths.isEmpty
+    // A segment written after the row snapshot has no rows yet; never touch anything that young.
+    let youngestDeletableDate = Date().addingTimeInterval(-(FrameStore.segmentDuration + 60))
 
     for case let fileURL as URL in enumerator {
       do {
-        let values = try fileURL.resourceValues(forKeys: [.isDirectoryKey])
+        let values = try fileURL.resourceValues(forKeys: [
+          .isDirectoryKey, .contentModificationDateKey,
+        ])
         if values.isDirectory == true { continue }
+        if fileURL.path == activeSegmentPath { continue }
+        if let modified = values.contentModificationDate, modified > youngestDeletableDate {
+          continue
+        }
 
         if deleteAll || !activeScreenshotPaths.contains(fileURL.path) {
           try fileMgr.removeItem(at: fileURL)

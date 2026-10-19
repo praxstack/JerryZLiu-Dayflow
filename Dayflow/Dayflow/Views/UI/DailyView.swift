@@ -4,6 +4,8 @@ import SwiftUI
 import UserNotifications
 
 struct DailyView: View {
+  @Environment(\.dayflowTheme) var theme
+  @Environment(\.stylePreviewAfter) var stylePreviewAfter
   @AppStorage("isDailyUnlocked") var isUnlocked: Bool = false
   @Binding var selectedDate: Date
   @EnvironmentObject var categoryStore: CategoryStore
@@ -43,7 +45,8 @@ struct DailyView: View {
     [:]
 
   let betaNoticeCopy =
-    "Daily is a new way to visualize your day and turn it into a standup update fast."
+    String(
+      localized: "Daily is a new way to visualize your day and turn it into a standup update fast.")
   let priorStandupHistoryLimit = 3
   static let maxDateTitleWidth: CGFloat = {
     let referenceText = "Wednesday, September 30"
@@ -63,7 +66,6 @@ struct DailyView: View {
       }
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-    .environment(\.colorScheme, .light)
     .onAppear {
       refreshDailyAccessProgress()
       dailyRecapProvider = DailyRecapGenerator.shared.selectedProvider()

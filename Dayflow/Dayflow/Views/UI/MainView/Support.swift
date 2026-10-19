@@ -6,13 +6,13 @@ import SwiftUI
 
 let cachedTodayDisplayFormatter: DateFormatter = {
   let formatter = DateFormatter()
-  formatter.dateFormat = "'Today,' MMM d"
+  formatter.setLocalizedDateFormatFromTemplate("MMMd")
   return formatter
 }()
 
 let cachedOtherDayDisplayFormatter: DateFormatter = {
   let formatter = DateFormatter()
-  formatter.dateFormat = "E, MMM d"
+  formatter.setLocalizedDateFormatFromTemplate("EMMMd")
   return formatter
 }()
 
@@ -30,8 +30,7 @@ let timelinePerfLogger = Logger(
 #if DEBUG
   private let timelinePerfLogFileURL = URL(fileURLWithPath: "/tmp/dayflow-timeline-perf.log")
   private let timelinePerfLogQueue = DispatchQueue(
-    label: "teleportlabs.com.Dayflow.timelinePerfLog"
-  )
+    label: "teleportlabs.com.Dayflow.timelinePerfLog")
   private let timelinePerfTimestampFormatter: ISO8601DateFormatter = {
     let formatter = ISO8601DateFormatter()
     formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -113,18 +112,20 @@ extension MainView {
   var timelineInspectorWidth: CGFloat {
     switch timelineMode {
     case .day:
-      return 358
+      // 358pt of content plus the 5pt inset the panel card sits in.
+      return 363
     case .week:
       return isWeekTimelineInspectorVisible ? weekInspectorWidth : 0
     }
   }
 
   var timelineInspectorDividerWidth: CGFloat {
+    let gap: CGFloat = 12
     switch timelineMode {
     case .day:
-      return 1
+      return gap
     case .week:
-      return isWeekTimelineInspectorVisible ? 1 : 0
+      return isWeekTimelineInspectorVisible ? gap : 0
     }
   }
 
@@ -184,9 +185,12 @@ extension MainView {
     let totalHours = Int(weeklyTrackedMinutes / 60)
     switch timelineMode {
     case .day:
-      return ("\(totalHours) hours", " tracked this week")
+      return (String(localized: "\(totalHours) hours"), String(localized: " tracked this week"))
     case .week:
-      return ("\(totalHours) hours", " of activities tracked this week")
+      return (
+        String(localized: "\(totalHours) hours"),
+        String(localized: " of activities tracked this week")
+      )
     }
   }
 
@@ -198,7 +202,7 @@ extension MainView {
     let timelineToday = timelineDisplayDate(from: now, now: now)
 
     if calendar.isDate(displayDate, inSameDayAs: timelineToday) {
-      return cachedTodayDisplayFormatter.string(from: displayDate)
+      return String(localized: "Today, \(cachedTodayDisplayFormatter.string(from: displayDate))")
     } else {
       return cachedOtherDayDisplayFormatter.string(from: displayDate)
     }

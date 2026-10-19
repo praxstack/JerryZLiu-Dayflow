@@ -49,17 +49,12 @@ final class IdleCapturePreferencesTests: XCTestCase {
     defer { UserDefaults.standard.removeObject(forKey: "screenshotIntervalSeconds") }
 
     IdleCapturePreferences.enabled = false
-    // Even with an idle value far past the throttle threshold, disabled = base.
-    let interval = IdleCaptureInterval.interval(
+    let interval = IdleCaptureInterval.effectiveInterval(
       baseInterval: 15.0,
-      idleThrottledInterval: IdleCaptureDefaults.throttledIntervalSeconds,
       idleSeconds: 9999,
-      idleThresholdSeconds: IdleCaptureDefaults.idleThresholdSeconds
+      throttleEnabled: false
     )
-    // The pure function still throttles; the gate is IdleCapturePreferences.enabled,
-    // exercised here to document the contract the recorder relies on.
-    XCTAssertEqual(interval, IdleCaptureDefaults.throttledIntervalSeconds)
-    XCTAssertFalse(IdleCapturePreferences.enabled)
+    XCTAssertEqual(interval, 15.0)
   }
 
   // The Settings view-model must reflect and persist the preference: reading

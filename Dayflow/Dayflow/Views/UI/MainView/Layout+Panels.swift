@@ -43,30 +43,17 @@ extension MainView {
   }
 
   private var leftColumn: some View {
-    // Left column: Logo on top, sidebar centered
-    VStack(spacing: 0) {
-      // Logo area (keeps same animation)
-      LogoBadgeView(imageName: "DayflowLogoMainApp", size: LogoPosition.logoSize)
-        .frame(height: 100)
-        .frame(maxWidth: .infinity)
-        .offset(y: LogoPosition.logoVerticalOffset)
-        .scaleEffect(logoScale)
-        .opacity(logoOpacity)
-
-      Spacer(minLength: 0)
-
-      // Sidebar in fixed-width gutter
-      VStack {
-        Spacer()
-        SidebarView(selectedIcon: $selectedIcon)
-          .frame(maxWidth: .infinity, alignment: .center)
-          .offset(y: sidebarOffset)
-          .opacity(sidebarOpacity)
-        Spacer()
-      }
-      Spacer(minLength: 0)
+    // Left column: sidebar centered vertically in the gutter. The logo badge
+    // that used to sit above it is hidden for now.
+    VStack {
+      Spacer()
+      SidebarView(selectedIcon: $selectedIcon)
+        .frame(maxWidth: .infinity, alignment: .center)
+        .offset(y: sidebarOffset)
+        .opacity(sidebarOpacity)
+      Spacer()
     }
-    .frame(width: 100)
+    .frame(width: 80)
     .fixedSize(horizontal: true, vertical: false)
     .frame(maxHeight: .infinity)
     .layoutPriority(1)
@@ -82,13 +69,14 @@ extension MainView {
           .padding(15)
       case .chat:
         ChatPanelView()
+      case .flow:
+        FlowView()
+      case .agents:
+        AgentPlaybackView()
       case .daily:
         DailyView(selectedDate: $selectedDate)
       case .weekly:
         WeeklyView()
-      case .journal:
-        JournalView()
-          .padding(15)
       case .bug:
         BugReportView()
           .padding(15)
@@ -101,21 +89,25 @@ extension MainView {
     .padding(0)
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-    .background(mainPanelBackground)
+    .background {
+      if selectedIcon != .agents || !theme.isDark {
+        mainPanelBackground
+      }
+    }
   }
 
   private var mainPanelBackground: some View {
-    ZStack {
-      RoundedRectangle(cornerRadius: 8, style: .continuous)
-        .fill(Color.white)
-        .shadow(color: .black.opacity(0.04), radius: 4, x: 0, y: 0)
-      RoundedRectangle(cornerRadius: 8, style: .continuous)
-        .fill(Color.white)
-        .blendMode(.destinationOut)
-      RoundedRectangle(cornerRadius: 8, style: .continuous)
-        .fill(.white.opacity(0.22))
-    }
-    .compositingGroup()
+    let shape = RoundedRectangle(cornerRadius: 8, style: .continuous)
+    return
+      shape
+      .fill(theme.panelFill)
+      .overlay(
+        // Light-mode-only inner shadow (white 25%, 4px fade); dark keeps
+        // its shipped panel look.
+        InnerGlow(shape: shape, color: theme.isDark ? .clear : theme.panelInnerGlow, radius: 4)
+      )
+      .overlay(shape.strokeBorder(theme.panelBorder, lineWidth: 1))
+      .shadow(color: theme.panelShadow, radius: 12, x: 0, y: 0)
   }
 
   private func timelinePanel(geo: GeometryProxy) -> some View {
@@ -123,10 +115,8 @@ extension MainView {
       HStack(alignment: .top, spacing: 0) {
         timelineLeftColumn
           .zIndex(1)
-        Rectangle()
-          .fill(Color(hex: "ECECEC"))
+        Color.clear
           .frame(width: timelineInspectorDividerWidth)
-          .opacity(timelineInspectorDividerWidth == 0 ? 0 : 1)
           .frame(maxHeight: .infinity)
         timelineRightColumn(geo: geo)
       }
@@ -162,7 +152,11 @@ extension MainView {
       timelineTimeLabelFrames = frames
     }
     .onPreferenceChange(WeeklyHoursFramePreferenceKey.self) { frame in
-      weeklyHoursFrame = frame
+      // Deferred for the same reason as the cards-layer frame in
+      // CanvasTimelineDataView: avoid state writes during the layout pass.
+      DispatchQueue.main.async {
+        weeklyHoursFrame = frame
+      }
     }
   }
 
@@ -171,7 +165,11 @@ extension MainView {
       TabFilterBar(
         categories: categoryStore.editableCategories,
         idleCategory: categoryStore.idleCategory,
-        onManageCategories: { showCategoryEditor = true }
+        mutedCategoryKeys: $mutedCategoryKeys,
+        onManageCategories: { showCategoryEditor = true },
+        onMoveCategory: { id, targetID in
+          categoryStore.moveCategory(id: id, toPositionOf: targetID)
+        }
       )
       .padding(.leading, 10 + TimelineAlignment.categoryRowInset)
       .opacity(contentOpacity)
@@ -200,7 +198,8 @@ extension MainView {
             cardCompactVerticalPadding: TimelineCardLayout.compactVerticalPadding,
             cardNormalVerticalPadding: TimelineCardLayout.normalVerticalPadding,
             cardHoverScale: TimelineCardLayout.hoverScale,
-            cardPressedScale: TimelineCardLayout.pressedScale
+            cardPressedScale: TimelineCardLayout.pressedScale,
+            mutedCategoryKeys: mutedCategoryKeys
           )
           // Day is the zoomed-IN view (1/7 of a week). Entering Day feels
           // like diving into a single column: grow from 0.95 → 1 + fade in.
@@ -220,7 +219,8 @@ extension MainView {
             onClearSelection: { clearTimelineSelection() },
             weeklyHoursFrame: weeklyHoursFrame,
             weeklyHoursIntersectsCard: $weeklyHoursIntersectsCard,
-            hideCardsForModeSwitch: hideWeekCardsDuringModeSwitch
+            hideCardsForModeSwitch: hideWeekCardsDuringModeSwitch,
+            mutedCategoryKeys: mutedCategoryKeys
           )
           // Week is the zoomed-OUT view (7 days). Entering Week from Day
           // feels like pulling back: start at 1.05 (slightly too large) and
@@ -276,12 +276,13 @@ extension MainView {
     .allowsHitTesting(true)
   }
 
+  // Figma: the right panel is its own inset card (5pt from the panel edges,
+  // 6pt radius, hairline border) rather than a flush column.
   private func timelineRightColumn(geo: GeometryProxy) -> some View {
-    ZStack(alignment: .topLeading) {
-      if timelineInspectorWidth > 0 {
-        Color.white.opacity(0.7)
-      }
+    let shape = RoundedRectangle(cornerRadius: 6, style: .continuous)
+    let inset: CGFloat = 5
 
+    return ZStack(alignment: .topLeading) {
       switch timelineMode {
       case .day:
         dayTimelineInspectorContent(geo: geo)
@@ -289,26 +290,22 @@ extension MainView {
         weekTimelineInspectorContent(geo: geo)
       }
     }
-    .frame(width: timelineInspectorWidth)
+    .frame(width: max(0, timelineInspectorWidth - inset))
     .frame(maxHeight: .infinity)
+    .clipShape(shape)
+    .background {
+      if timelineInspectorWidth > 0 {
+        shape
+          .fill(theme.rightPanelFill)
+          .overlay(shape.strokeBorder(theme.rightPanelBorder, lineWidth: 0.75))
+          .shadow(color: theme.rightPanelShadow, radius: 4, x: 0, y: 0)
+      }
+    }
+    .contentShape(shape)
+    .padding(.vertical, inset)
+    .padding(.trailing, inset)
+    .frame(width: timelineInspectorWidth)
     .opacity(contentOpacity)
-    .clipped()
-    .clipShape(
-      UnevenRoundedRectangle(
-        cornerRadii: .init(
-          topLeading: 0,
-          bottomLeading: 0, bottomTrailing: 8, topTrailing: 8
-        )
-      )
-    )
-    .contentShape(
-      UnevenRoundedRectangle(
-        cornerRadii: .init(
-          topLeading: 0,
-          bottomLeading: 0, bottomTrailing: 8, topTrailing: 8
-        )
-      )
-    )
   }
 
   @ViewBuilder
@@ -319,35 +316,47 @@ extension MainView {
       timelineActivityInspector(activity: activity, geo: geo)
         .transition(.opacity.combined(with: .scale(scale: 0.98)))
     } else {
-      DaySummaryView(
-        selectedDate: selectedDate,
-        categories: categoryStore.categories,
-        storageManager: StorageManager.shared,
-        cardsToReviewCount: reviewPromptCount,
-        reviewRefreshToken: reviewSummaryRefreshToken,
-        recordingControlMode: RecordingControl.currentMode(
-          appState: appState,
-          pauseManager: pauseManager
-        ),
-        goalPromptDay: pendingGoalPromptDay,
-        onGoalPromptHandled: { day in
-          markDailyGoalPromptHandled(day: day)
-        },
-        onReviewTap: {
-          guard reviewPromptCount > 0 else { return }
-          withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-            showTimelineReview = true
+      VStack(spacing: 0) {
+        GettingStartedChecklistCard(onOpenTab: { tab in
+          withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) {
+            selectedIcon = tab
           }
-        },
-        onShowGoalFlow: { presentation in
-          withAnimation(.spring(response: 0.32, dampingFraction: 0.9)) {
-            goalFlowPresentation = presentation
-          }
-        }
-      )
-      .frame(maxWidth: .infinity, maxHeight: .infinity)
+        })
+
+        daySummary(reviewPromptCount: reviewPromptCount)
+      }
       .transition(.opacity.combined(with: .scale(scale: 0.98)))
     }
+  }
+
+  private func daySummary(reviewPromptCount: Int) -> some View {
+    DaySummaryView(
+      selectedDate: selectedDate,
+      categories: categoryStore.categories,
+      storageManager: StorageManager.shared,
+      cardsToReviewCount: reviewPromptCount,
+      reviewRefreshToken: reviewSummaryRefreshToken,
+      recordingControlMode: RecordingControl.currentMode(
+        appState: appState,
+        pauseManager: pauseManager
+      ),
+      goalPromptDay: pendingGoalPromptDay,
+      onGoalPromptHandled: { day in
+        markDailyGoalPromptHandled(day: day)
+      },
+      onReviewTap: {
+        guard reviewPromptCount > 0 else { return }
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+          showTimelineReview = true
+        }
+      },
+      onShowGoalFlow: { presentation in
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.9)) {
+          goalFlowPresentation = presentation
+        }
+      }
+    )
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
   }
 
   @ViewBuilder
@@ -373,6 +382,9 @@ extension MainView {
         hasAnyActivities: hasAnyActivities,
         onCategoryChange: { category, activity in
           handleCategoryChange(to: category, for: activity)
+        },
+        onTitleChange: { newTitle, activity in
+          handleTitleChange(to: newTitle, for: activity)
         },
         onNavigateToCategoryEditor: {
           showCategoryEditor = true
@@ -432,15 +444,15 @@ extension MainView {
   }
 
   private var weeklyHoursText: some View {
-    let textColor = Color(red: 0.84, green: 0.65, blue: 0.52)
+    let textColor = theme.textTertiary
     let parts = timelineTrackedMinutesParts
 
     return
       (Text(parts.bold)
-      .font(Font.custom("Figtree", size: 10).weight(.bold))
+      .font(Font.custom("Figtree", size: stylePreviewAfter ? 14 : 10).weight(.bold))
       .foregroundColor(textColor)
       + Text(parts.rest)
-      .font(Font.custom("Figtree", size: 10).weight(.regular))
+      .font(Font.custom("Figtree", size: stylePreviewAfter ? 14 : 10).weight(.regular))
       .foregroundColor(textColor))
       .background(
         GeometryReader { proxy in
@@ -453,9 +465,9 @@ extension MainView {
   }
 
   private var copyTimelineButton: some View {
-    let background = Color(red: 0.99, green: 0.93, blue: 0.88)
-    let stroke = Color(red: 0.97, green: 0.89, blue: 0.81)
-    let textColor = Color(red: 0.84, green: 0.65, blue: 0.52)
+    let background = theme.secondaryButtonFill
+    let stroke = theme.secondaryButtonBorder
+    let textColor = theme.secondaryButtonText
 
     // Slide up + fade: no text scaling (scaling distorts letterforms)
     let enterTransition = AnyTransition.opacity
@@ -475,7 +487,7 @@ extension MainView {
             Image(systemName: "checkmark")
               .font(.system(size: 11.5, weight: .medium))
             Text("Copied")
-              .font(Font.custom("Figtree", size: 11.5).weight(.medium))
+              .font(Font.custom("Figtree", size: stylePreviewAfter ? 14 : 11.5).weight(.medium))
           }
           .transition(.asymmetric(insertion: enterTransition, removal: exitTransition))
         } else {
@@ -487,20 +499,27 @@ extension MainView {
               .scaledToFit()
               .frame(width: 11.5, height: 11.5)
             Text("Copy timeline")
-              .font(Font.custom("Figtree", size: 11.5).weight(.medium))
+              .font(Font.custom("Figtree", size: stylePreviewAfter ? 14 : 11.5).weight(.medium))
           }
           .transition(.asymmetric(insertion: enterTransition, removal: exitTransition))
         }
       }
       .animation(.spring(response: 0.3, dampingFraction: 0.85), value: copyTimelineState)
-      .frame(width: 104, height: 23)
+      .fixedSize(horizontal: true, vertical: false)
+      .padding(.horizontal, 8)
+      .frame(minWidth: stylePreviewAfter ? 122 : 104)
+      .frame(height: stylePreviewAfter ? 26 : 23)
       .foregroundColor(textColor)
       .background(background)
+      .background {
+        if theme.isDark {
+          Rectangle().fill(.ultraThinMaterial)
+        }
+      }
       .clipShape(RoundedRectangle(cornerRadius: 7))
       .overlay(
         RoundedRectangle(cornerRadius: 7)
-          .inset(by: 0.5)
-          .stroke(stroke, lineWidth: 1)
+          .strokeBorder(stroke, lineWidth: 1)
       )
       .contentShape(Rectangle())
     }

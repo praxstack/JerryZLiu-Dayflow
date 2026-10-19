@@ -208,6 +208,16 @@ else
   cp "${ENTITLEMENTS}" "${RESOLVED_ENTS}"
 fi
 
+# Sign the bundled dayflow CLI before the app container seals over it.
+# It's a plain hardened-runtime binary with no entitlements of its own.
+CLI_BINARY="${SANITIZED_APP}/Contents/Helpers/dayflow"
+if [[ -f "${CLI_BINARY}" ]]; then
+  codesign -vvv --force -o runtime --timestamp --sign "${SIGN_ID}" "${CLI_BINARY}"
+else
+  echo "WARNING: bundled dayflow CLI not found at ${CLI_BINARY}." >&2
+  echo "         The 'Embed Dayflow CLI' build phase may not have run." >&2
+fi
+
 # Now sign the top-level app bundle (no --deep), using resolved entitlements
 codesign -vvv --force --strict \
   --options runtime \
@@ -222,12 +232,21 @@ if command -v rg >/dev/null 2>&1; then
   if ! printf "%s" "$ENT_DUMP" | rg -q "com.apple.security.temporary-exception.mach-lookup.global-name"; then
     echo "WARNING: mach-lookup entitlement missing on app. Check entitlements substitution." >&2
   fi
-  if ! printf "%s" "$ENT_DUMP" | rg -q "-spks|teleportlabs.com.Dayflow-spks"; then
+  if ! printf "%s" "$ENT_DUMP" | rg -q -e "-spks|teleportlabs.com.Dayflow-spks"; then
     echo "WARNING: Sparkle status mach service (-spks) not present in entitlements." >&2
   fi
-  if ! printf "%s" "$ENT_DUMP" | rg -q "-spki|teleportlabs.com.Dayflow-spki"; then
+  if ! printf "%s" "$ENT_DUMP" | rg -q -e "-spki|teleportlabs.com.Dayflow-spki"; then
     echo "WARNING: Sparkle installer mach service (-spki) not present in entitlements." >&2
   fi
+fi
+
+# Without audio-input the hardened runtime denies the microphone silently and
+# Flow's voice planning fails for every user, so refuse to ship that.
+SIGNED_ENTS="${SANITIZED_DIR}/signed.entitlements"
+codesign -d --entitlements "${SIGNED_ENTS}" --xml "${SANITIZED_APP}" 2>/dev/null || true
+if [[ "$(/usr/libexec/PlistBuddy -c 'Print :com.apple.security.device.audio-input' "${SIGNED_ENTS}" 2>/dev/null)" != "true" ]]; then
+  echo "ERROR: com.apple.security.device.audio-input entitlement missing on app; Flow voice planning would fail." >&2
+  exit 1
 fi
 
 echo "[6/8] Verifying signature…"

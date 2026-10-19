@@ -8,14 +8,13 @@
 
 import AppKit
 import Foundation
-import ImageIO
 import QuartzCore
 
 @MainActor
 final class ScreenshotSlideshowPlaybackTimelineState: ObservableObject {
   @Published var currentTime: Double = 0
   @Published var duration: Double = 1
-  @Published var speedLabel: String = "20x"
+  @Published var speedLabel: String = String(localized: "20x")
   @Published var isPlaying: Bool = true
 }
 
@@ -331,20 +330,8 @@ private final class ScreenshotSlideshowFrameLoader: @unchecked Sendable {
 
   private func decodeImage(at index: Int) -> CGImage? {
     guard screenshots.indices.contains(index) else { return nil }
-    let url = screenshots[index].fileURL
-    guard FileManager.default.fileExists(atPath: url.path) else { return nil }
-    guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
-
-    let options: [CFString: Any] = [
-      kCGImageSourceCreateThumbnailFromImageAlways: true,
-      kCGImageSourceShouldCacheImmediately: true,
-      kCGImageSourceCreateThumbnailWithTransform: true,
-      kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
-    ]
-    guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
-    else {
-      return nil
-    }
-    return cgImage
+    let screenshot = screenshots[index]
+    guard screenshot.isAvailable else { return nil }
+    return screenshot.loadCGImage(maxPixelSize: maxPixelSize)
   }
 }

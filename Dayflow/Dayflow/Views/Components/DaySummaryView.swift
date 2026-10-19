@@ -9,7 +9,25 @@ import SwiftUI
 
 private let dayGoalReviewShownTimelineDayKey = "dayGoalReviewShownTimelineDay"
 
+struct DaySummaryLoadToken: Equatable, Sendable {
+  let id: UUID
+  let dayString: String
+
+  init(id: UUID = UUID(), dayString: String) {
+    self.id = id
+    self.dayString = dayString
+  }
+
+  /// Token equality is the latest-wins guarantee. The day keeps tokens self-describing and
+  /// prevents a request identity from being reused across timeline days.
+  func matches(latest: DaySummaryLoadToken?) -> Bool {
+    self == latest
+  }
+}
+
 struct DaySummaryView: View {
+  @Environment(\.dayflowTheme) private var theme
+
   let selectedDate: Date
   let categories: [TimelineCategory]
   let storageManager: StorageManaging
@@ -44,6 +62,12 @@ struct DaySummaryView: View {
   @State private var cachedFocusBlocks: [FocusBlock] = []
   @State private var cachedTotalDistractedTime: TimeInterval = 0
   @State private var reviewSummary = TimelineReviewSummarySnapshot.placeholder
+  @State private var dataLoadTask: Task<Void, Never>?
+  @State private var reviewLoadTask: Task<Void, Never>?
+  @State private var categoryStatsTask: Task<Void, Never>?
+  @State private var dataLoadToken: DaySummaryLoadToken?
+  @State private var reviewLoadToken: DaySummaryLoadToken?
+  @State private var categoryStatsToken: DaySummaryLoadToken?
 
   private let showDistractionPattern = false
   private enum Design {
@@ -55,11 +79,6 @@ struct DaySummaryView: View {
     static let targetsHeight: CGFloat = 213
     static let headerSpacing: CGFloat = 6
     static let donutSectionSpacing: CGFloat = 20
-
-    static let dividerColor = Color(hex: "E7E5E3")
-
-    static let titleColor = Color(hex: "333333")
-    static let subtitleColor = Color(hex: "707070")
 
   }
 
@@ -165,6 +184,9 @@ struct DaySummaryView: View {
     .onAppear {
       loadData()
     }
+    .onDisappear {
+      cancelLoadTasks()
+    }
     .onChange(of: selectedDate) {
       loadData()
     }
@@ -197,10 +219,20 @@ struct DaySummaryView: View {
   // MARK: - Data Loading
 
   private func loadData() {
+    dataLoadTask?.cancel()
+    reviewLoadTask?.cancel()
+    categoryStatsTask?.cancel()
+    reviewLoadTask = nil
+    categoryStatsTask = nil
+    reviewLoadToken = nil
+    categoryStatsToken = nil
+
     isLoading = true
 
     let dayInfo = timelineDayInfo
     let dayString = dayInfo.dayString
+    let loadToken = DaySummaryLoadToken(dayString: dayString)
+    dataLoadToken = loadToken
     let previousDayInfo = previousTimelineDayInfo
     let storageManager = storageManager
     let currentTimelineDate = timelineDisplayDate(from: selectedDate)
@@ -208,7 +240,7 @@ struct DaySummaryView: View {
     // Capture current state for background computation
     let currentCategories = categories
 
-    Task.detached(priority: .userInitiated) {
+    dataLoadTask = Task.detached(priority: .userInitiated) {
       // Use timeline display date to handle 4 AM boundary
       let cards = storageManager.fetchTimelineCards(forDay: dayString)
       let explicitPlanForDay = storageManager.fetchDayGoalPlan(forDay: dayString) != nil
@@ -253,7 +285,20 @@ struct DaySummaryView: View {
         categories: currentCategories
       )
 
+      guard !Task.isCancelled else { return }
+
       await MainActor.run {
+        guard loadToken.matches(latest: self.dataLoadToken) else { return }
+
+        // A targeted refresh may have started while this full load was running. The full load
+        // owns the complete snapshot, so it also owns the overlapping review and stats fields.
+        self.reviewLoadTask?.cancel()
+        self.categoryStatsTask?.cancel()
+        self.reviewLoadTask = nil
+        self.categoryStatsTask = nil
+        self.reviewLoadToken = nil
+        self.categoryStatsToken = nil
+
         self.timelineCards = cards
         self.applyGoalPlan(plan)
         self.hasExplicitDayGoalPlan = explicitPlanForDay
@@ -270,14 +315,19 @@ struct DaySummaryView: View {
         self.yesterdayGoalReview = yesterdayReview
         self.goalSetupReferenceStats = setupReferenceStats
         self.handleGoalPromptIfReady()
+        self.dataLoadTask = nil
       }
     }
   }
 
   private func loadReviewSummary() {
+    reviewLoadTask?.cancel()
+
     let dayInfo = timelineDayInfo
+    let loadToken = DaySummaryLoadToken(dayString: dayInfo.dayString)
+    reviewLoadToken = loadToken
     let storageManager = storageManager
-    Task.detached(priority: .userInitiated) {
+    reviewLoadTask = Task.detached(priority: .userInitiated) {
       let summary = DaySummaryStats.makeReviewSummary(
         segments: storageManager.fetchReviewRatingSegments(
           overlapping: Int(dayInfo.startOfDay.timeIntervalSince1970),
@@ -286,10 +336,28 @@ struct DaySummaryView: View {
         dayStartTs: Int(dayInfo.startOfDay.timeIntervalSince1970),
         dayEndTs: Int(dayInfo.endOfDay.timeIntervalSince1970)
       )
+
+      guard !Task.isCancelled else { return }
+
       await MainActor.run {
-        reviewSummary = summary
+        guard loadToken.matches(latest: self.reviewLoadToken) else { return }
+
+        self.reviewSummary = summary
+        self.reviewLoadTask = nil
       }
     }
+  }
+
+  private func cancelLoadTasks() {
+    dataLoadTask?.cancel()
+    reviewLoadTask?.cancel()
+    categoryStatsTask?.cancel()
+    dataLoadTask = nil
+    reviewLoadTask = nil
+    categoryStatsTask = nil
+    dataLoadToken = nil
+    reviewLoadToken = nil
+    categoryStatsToken = nil
   }
 
   // MARK: - Header
@@ -401,7 +469,7 @@ struct DaySummaryView: View {
       VStack(alignment: .leading, spacing: Design.headerSpacing) {
         Text("Your day so far")
           .font(.custom("InstrumentSerif-Regular", size: 24))
-          .foregroundColor(Design.titleColor)
+          .foregroundColor(theme.textPrimary)
       }
 
       if isLoading && hasCompletedInitialLoad == false {
@@ -423,12 +491,12 @@ struct DaySummaryView: View {
   private var emptyChartPlaceholder: some View {
     VStack(spacing: 12) {
       Circle()
-        .stroke(Color.gray.opacity(0.2), lineWidth: 20)
+        .stroke(theme.targetsTrackFill, lineWidth: 20)
         .frame(width: 140, height: 140)
 
       Text("No activity data yet")
         .font(.custom("Figtree", size: 12))
-        .foregroundColor(Color.gray.opacity(0.6))
+        .foregroundColor(theme.textSecondary)
     }
     .padding(.vertical, 20)
   }
@@ -486,7 +554,7 @@ struct DaySummaryView: View {
 
   private var sectionDivider: some View {
     Rectangle()
-      .fill(Design.dividerColor)
+      .fill(theme.rightPanelDivider)
       .frame(height: 1)
       .frame(maxWidth: .infinity)
   }
@@ -821,47 +889,28 @@ struct DaySummaryView: View {
   }
 
   private func formatDurationTitleCase(_ seconds: TimeInterval) -> String {
-    let totalMinutes = Int(seconds / 60)
-    let hours = totalMinutes / 60
-    let minutes = totalMinutes % 60
-
-    if hours > 0 && minutes > 0 {
-      return "\(hours) Hours \(minutes) minutes"
-    } else if hours > 0 {
-      return "\(hours) Hours"
-    } else if minutes > 0 {
-      return "\(minutes) minutes"
-    } else {
-      return "0 minutes"
-    }
+    LocalizedDuration.string(seconds)
   }
 
   private func formatDurationLowercase(_ seconds: TimeInterval) -> String {
-    let totalMinutes = Int(seconds / 60)
-    let hours = totalMinutes / 60
-    let minutes = totalMinutes % 60
-
-    if hours > 0 && minutes > 0 {
-      return "\(hours) hours \(minutes) minutes"
-    } else if hours > 0 {
-      return "\(hours) hours"
-    } else if minutes > 0 {
-      return "\(minutes) minutes"
-    } else {
-      return "0 minutes"
-    }
+    LocalizedDuration.string(seconds)
   }
 
   /// Recomputes cached stats when categories change (rename/color/system/focus/distraction flags)
   private func recomputeCachedStatsForCategoryChange() {
+    categoryStatsTask?.cancel()
+
     let precomputed =
       cardsWithDurations.isEmpty
       ? DaySummaryStats.precomputeCardDurations(timelineCards) : cardsWithDurations
     let currentCategories = categories
     let plan = effectiveGoalPlan
-    let baseDate = timelineDayInfo.startOfDay
+    let dayInfo = timelineDayInfo
+    let baseDate = dayInfo.startOfDay
+    let loadToken = DaySummaryLoadToken(dayString: dayInfo.dayString)
+    categoryStatsToken = loadToken
 
-    Task.detached(priority: .userInitiated) {
+    categoryStatsTask = Task.detached(priority: .userInitiated) {
       let catDurations = DaySummaryStats.computeCategoryDurations(
         from: precomputed, categories: currentCategories)
       let totalCaptured = DaySummaryStats.computeTotalCapturedTime(
@@ -874,12 +923,17 @@ struct DaySummaryView: View {
       let totalDistracted = DaySummaryStats.computeTotalDistractedTime(
         from: precomputed, snapshots: plan.distractionCategories, categories: currentCategories)
 
+      guard !Task.isCancelled else { return }
+
       await MainActor.run {
+        guard loadToken.matches(latest: self.categoryStatsToken) else { return }
+
         self.cachedCategoryDurations = catDurations
         self.cachedTotalCapturedTime = totalCaptured
         self.cachedTotalFocusTime = totalFocus
         self.cachedFocusBlocks = blocks
         self.cachedTotalDistractedTime = totalDistracted
+        self.categoryStatsTask = nil
       }
     }
   }

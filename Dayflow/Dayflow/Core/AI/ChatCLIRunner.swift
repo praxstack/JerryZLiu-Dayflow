@@ -15,6 +15,15 @@ import Foundation
 enum ChatCLITool: String, Codable {
   case codex
   case claude
+
+  var providerID: LLMProviderID {
+    switch self {
+    case .codex:
+      return .chatGPT
+    case .claude:
+      return .claude
+    }
+  }
 }
 
 /// Events emitted during JSONL streaming from CLI tools
@@ -45,19 +54,43 @@ struct ChatCLIRunResult {
   let startedAt: Date
   let finishedAt: Date
   let usage: TokenUsage?
+
+  /// The CLI's own explanation of a failed run. Claude and Codex often print
+  /// the real reason ("OAuth session expired", "usage limit") to stdout and
+  /// leave stderr empty, so fall back to stdout before the bare exit code.
+  func failureMessage(toolName: String) -> String {
+    let trimmedStderr = stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+    if !trimmedStderr.isEmpty { return trimmedStderr }
+
+    let trimmedStdout = stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+    if !trimmedStdout.isEmpty { return String(trimmedStdout.prefix(1_000)) }
+
+    return "\(toolName) exited with code \(exitCode)"
+  }
 }
 
 struct TokenUsage: Sendable {
   let input: Int
   let cachedInput: Int
+  let cacheCreationInput: Int
   let output: Int
 
-  static var zero: TokenUsage { TokenUsage(input: 0, cachedInput: 0, output: 0) }
+  init(input: Int, cachedInput: Int, cacheCreationInput: Int = 0, output: Int) {
+    self.input = input
+    self.cachedInput = cachedInput
+    self.cacheCreationInput = cacheCreationInput
+    self.output = output
+  }
+
+  static var zero: TokenUsage {
+    TokenUsage(input: 0, cachedInput: 0, cacheCreationInput: 0, output: 0)
+  }
 
   func adding(_ other: TokenUsage?) -> TokenUsage {
     guard let other else { return self }
     return TokenUsage(
       input: input + other.input, cachedInput: cachedInput + other.cachedInput,
+      cacheCreationInput: cacheCreationInput + other.cacheCreationInput,
       output: output + other.output)
   }
 }

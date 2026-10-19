@@ -6,6 +6,7 @@ struct SettingsStorageTabView: View {
   var body: some View {
     VStack(alignment: .leading, spacing: SettingsStyle.sectionSpacing) {
       recordingStatusSection
+      recordingQualitySection
       diskUsageSection
     }
     .alert(isPresented: $viewModel.showLimitConfirmation) {
@@ -41,21 +42,28 @@ struct SettingsStorageTabView: View {
     let isRecording = permissionGranted && recordingEnabled
     let recorderStatus: SettingsStatusDot.State =
       isRecording ? .good : (permissionGranted ? .idle : .bad)
-    let recorderLabel = isRecording ? "Active" : (permissionGranted ? "Idle" : "Blocked")
+    let recorderLabel =
+      isRecording
+      ? String(localized: "Active")
+      : (permissionGranted
+        ? String(localized: "Idle")
+        : String(
+          localized: "Permission required",
+          comment: "Screen recording is blocked because permission has not been granted."))
 
     return SettingsSection(
-      title: "Recording status",
-      subtitle: "Ensure Dayflow can capture your screen."
+      title: String(localized: "Recording status"),
+      subtitle: String(localized: "Ensure Dayflow can capture your screen.")
     ) {
       VStack(alignment: .leading, spacing: 0) {
-        SettingsRow(label: "Screen recording permission") {
+        SettingsRow(label: String(localized: "Screen recording permission")) {
           SettingsStatusDot(
             state: permissionGranted ? .good : .bad,
-            label: permissionGranted ? "Granted" : "Missing"
+            label: permissionGranted ? String(localized: "Granted") : String(localized: "Missing")
           )
         }
 
-        SettingsRow(label: "Recorder", showsDivider: false) {
+        SettingsRow(label: String(localized: "Recorder"), showsDivider: false) {
           SettingsStatusDot(
             state: recorderStatus,
             label: recorderLabel
@@ -64,13 +72,14 @@ struct SettingsStorageTabView: View {
 
         HStack(spacing: 14) {
           SettingsPrimaryButton(
-            title: viewModel.isRefreshingStorage ? "Checking…" : "Run status check",
+            title: viewModel.isRefreshingStorage
+              ? String(localized: "Checking…") : String(localized: "Run status check"),
             isLoading: viewModel.isRefreshingStorage,
             action: viewModel.runStorageStatusCheck
           )
 
           if let last = viewModel.lastStorageCheck {
-            SettingsMetadata(text: "Last checked \(relativeDate(last))")
+            SettingsMetadata(text: String(localized: "Last checked \(relativeDate(last))"))
           }
         }
         .padding(.top, 18)
@@ -78,17 +87,94 @@ struct SettingsStorageTabView: View {
     }
   }
 
+  // MARK: - Recording quality
+
+  private var recordingQualitySection: some View {
+    SettingsSection(
+      title: String(localized: "Recording quality"),
+      subtitle: String(localized: "Higher resolution and more frequent captures use more disk.")
+    ) {
+      VStack(alignment: .leading, spacing: 0) {
+        SettingsRow(
+          label: String(localized: "Resolution"),
+          subtitle: String(localized: "Height each frame is scaled to")
+        ) {
+          settingsMenu(
+            selected: ScreenshotConfig.label(forHeight: viewModel.captureHeight),
+            options: ScreenshotConfig.heightOptions.map {
+              ($0, ScreenshotConfig.label(forHeight: $0))
+            },
+            onSelect: viewModel.setCaptureHeight
+          )
+        }
+
+        SettingsRow(
+          label: String(localized: "Capture frequency"),
+          subtitle: String(localized: "How often a frame is taken"), showsDivider: false
+        ) {
+          settingsMenu(
+            selected: ScreenshotConfig.label(forInterval: viewModel.captureInterval),
+            options: ScreenshotConfig.intervalOptions.map {
+              ($0, ScreenshotConfig.label(forInterval: $0))
+            },
+            onSelect: viewModel.setCaptureInterval
+          )
+        }
+
+        VStack(alignment: .leading, spacing: 4) {
+          SettingsMetadata(text: viewModel.recordingEstimateText())
+          if let observed = viewModel.observedRateText() {
+            SettingsMetadata(text: observed)
+          }
+        }
+        .padding(.top, 18)
+      }
+    }
+  }
+
+  /// Compact dropdown matching the storage-limit picker below.
+  private func settingsMenu<Value: Hashable>(
+    selected: String,
+    options: [(value: Value, label: String)],
+    onSelect: @escaping (Value) -> Void
+  ) -> some View {
+    Menu {
+      ForEach(options, id: \.value) { option in
+        Button(option.label) { onSelect(option.value) }
+      }
+    } label: {
+      HStack(spacing: 5) {
+        Text(selected)
+          .font(.custom("Figtree", size: 13))
+          .fontWeight(.semibold)
+        Image(systemName: "chevron.down")
+          .font(.system(size: 10, weight: .semibold))
+      }
+      .foregroundColor(SettingsStyle.ink)
+      .padding(.horizontal, 12)
+      .padding(.vertical, 7)
+      .background(
+        RoundedRectangle(cornerRadius: 7, style: .continuous)
+          .fill(Color.black.opacity(0.05))
+      )
+    }
+    .menuStyle(BorderlessButtonMenuStyle())
+    .menuIndicator(.hidden)
+    .fixedSize()
+    .pointingHandCursor()
+  }
+
   // MARK: - Disk usage
 
   private var diskUsageSection: some View {
     SettingsSection(
-      title: "Disk usage",
-      subtitle: "Open folders or adjust per-type storage caps."
+      title: String(localized: "Disk usage"),
+      subtitle: String(localized: "Open folders or adjust per-type storage caps.")
     ) {
       VStack(alignment: .leading, spacing: 0) {
         usageRow(
           category: .recordings,
-          label: "Recordings",
+          label: String(localized: "Recordings"),
           size: viewModel.recordingsUsageBytes,
           limitIndex: viewModel.recordingsLimitIndex,
           limitBytes: viewModel.recordingsLimitBytes,
@@ -96,7 +182,7 @@ struct SettingsStorageTabView: View {
         )
         usageRow(
           category: .timelapses,
-          label: "Timelapses",
+          label: String(localized: "Timelapses"),
           size: viewModel.timelapseUsageBytes,
           limitIndex: viewModel.timelapsesLimitIndex,
           limitBytes: viewModel.timelapsesLimitBytes,
@@ -147,7 +233,7 @@ struct SettingsStorageTabView: View {
         Spacer(minLength: 12)
 
         HStack(spacing: 8) {
-          SettingsSecondaryButton(title: "Open", action: action)
+          SettingsSecondaryButton(title: String(localized: "Open"), action: action)
 
           Menu {
             ForEach(StorageSettingsViewModel.storageOptions) { candidate in

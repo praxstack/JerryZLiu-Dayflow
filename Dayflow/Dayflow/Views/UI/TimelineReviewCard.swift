@@ -170,7 +170,7 @@ struct TimelineReviewCard: View {
   private var timeRangeText: String {
     let start = TimelineReviewTimeCache.shared.string(from: activity.startTime)
     let end = TimelineReviewTimeCache.shared.string(from: activity.endTime)
-    return "\(start) - \(end)"
+    return String(localized: "\(start) - \(end)")
   }
 
   private var usingVideoPlayer: Bool {
@@ -261,10 +261,10 @@ struct TimelineReviewCard: View {
     let targetSize = CGSize(width: 340, height: Design.mediaHeight)
 
     Task {
-      let screenshotURL = await previewSource.previewScreenshotURL(for: activity)
+      let screenshot = await previewSource.previewScreenshot(for: activity)
       guard !Task.isCancelled else { return }
 
-      guard let screenshotURL else {
+      guard let screenshot else {
         await MainActor.run {
           guard requestID == previewRequestID else { return }
           previewImage = nil
@@ -275,7 +275,7 @@ struct TimelineReviewCard: View {
       await MainActor.run {
         guard requestID == previewRequestID else { return }
         ScreenshotThumbnailCache.shared.fetchThumbnail(
-          fileURL: screenshotURL, targetSize: targetSize
+          screenshot: screenshot, targetSize: targetSize
         ) { image in
           guard requestID == previewRequestID else { return }
           previewImage = image?.cgImage(forProposedRect: nil, context: nil, hints: nil)

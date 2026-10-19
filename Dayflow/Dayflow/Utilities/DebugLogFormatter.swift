@@ -1,5 +1,44 @@
 import Foundation
 
+/// A freshly built debug log plus the counts we report to analytics.
+struct DebugLogSnapshot {
+  let text: String
+  let analyticsProperties: [String: Any]
+
+  /// Pulls the latest timeline cards, LLM calls, and batches from storage and formats them.
+  /// Runs storage reads, so call it off the main thread.
+  static func makeCurrent() -> DebugLogSnapshot {
+    let timeline = StorageManager.shared.fetchRecentTimelineCardsForDebug(limit: 5)
+    let batchIds = Array(Set(timeline.compactMap { $0.batchId }))
+
+    // Fall back to the global recent calls when no timeline batches exist yet.
+    let llmCalls: [LLMCallDebugEntry]
+    let llmCallSource: String
+    if batchIds.isEmpty {
+      llmCalls = StorageManager.shared.fetchRecentLLMCallsForDebug(limit: 20)
+      llmCallSource = "global"
+    } else {
+      llmCalls = StorageManager.shared.fetchLLMCallsForBatches(batchIds: batchIds, limit: 100)
+      llmCallSource = "timeline_batches"
+    }
+
+    let batches = StorageManager.shared.fetchRecentAnalysisBatchesForDebug(limit: 5)
+    let text =
+      AgentPlaybackDiagnostics.snapshot() + "\n\n"
+      + DebugLogFormatter.makeLog(timeline: timeline, llmCalls: llmCalls, batches: batches)
+
+    return DebugLogSnapshot(
+      text: text,
+      analyticsProperties: [
+        "timeline_count": timeline.count,
+        "llm_call_count": llmCalls.count,
+        "llm_call_source": llmCallSource,
+        "batch_count": batches.count,
+      ]
+    )
+  }
+}
+
 struct DebugLogFormatter {
   static func makeLog(
     timeline: [TimelineCardDebugEntry], llmCalls: [LLMCallDebugEntry],
@@ -160,5 +199,27 @@ struct DebugLogFormatter {
     let components = value.components(separatedBy: .whitespacesAndNewlines)
     let trimmed = components.filter { !$0.isEmpty }.joined(separator: " ")
     return trimmed.isEmpty ? nil : trimmed
+  }
+}
+
+/// Bounded local failure history, shared only through the existing support-log attachment flow.
+enum AgentPlaybackDiagnostics {
+  private static let key = "agentPlaybackFailureDiagnostics"
+
+  static func record(message: String, output: String, properties: [String: Any]) {
+    let metadata = properties.keys.sorted().map { "\($0)=\(properties[$0]!)" }
+      .joined(separator: "\n")
+    let entry =
+      "\(ISO8601DateFormatter().string(from: Date()))\n\(metadata)\n\(message)\nOutput tail:\n\(output.suffix(4000))"
+      .replacingOccurrences(of: FileManager.default.homeDirectoryForCurrentUser.path, with: "~")
+    var entries = UserDefaults.standard.stringArray(forKey: key) ?? []
+    entries.append(String(entry.suffix(8000)))
+    UserDefaults.standard.set(Array(entries.suffix(3)), forKey: key)
+  }
+
+  static func snapshot() -> String {
+    let entries = UserDefaults.standard.stringArray(forKey: key) ?? []
+    return "--- Agents startup/runtime failures (latest 3, local) ---\n"
+      + (entries.isEmpty ? "None recorded." : entries.joined(separator: "\n\n"))
   }
 }

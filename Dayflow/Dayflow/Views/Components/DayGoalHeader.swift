@@ -30,6 +30,7 @@ struct DayGoalHeader: View {
   let onSetGoals: () -> Void
 
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Environment(\.dayflowTheme) private var theme
 
   @State private var hasInitializedDisplayedProgress = false
   @State private var isAppActive = NSApplication.shared.isActive
@@ -37,24 +38,39 @@ struct DayGoalHeader: View {
   @State private var displayedFocusCategories: [TargetCategoryProgress] = []
   @State private var displayedDistractedDuration: TimeInterval = 0
   @State private var focusAnimationTask: Task<Void, Never>?
+  @State private var distractionCleanupTask: Task<Void, Never>?
   @State private var distractionImpactToken: CGFloat = 0
   @State private var distractionLoss: DistractionLossSnapshot?
 
+  private struct ProgressInputs: Equatable {
+    let focusTargetDuration: TimeInterval
+    let focusDuration: TimeInterval
+    let focusCategories: [TargetCategoryProgress]
+    let distractionLimitDuration: TimeInterval
+    let distractedDuration: TimeInterval
+    let showsDisabledState: Bool
+  }
+
   private enum Design {
-    static let panelBackground = Color(hex: "FFFDFB")
-    static let disabledBackground = Color(hex: "FCF9F6")
-    static let border = Color(hex: "EDE5E1")
-    static let disabledBorder = Color(hex: "D8D8D8")
-    static let title = Color(hex: "333333")
-    static let subtitle = Color(hex: "707070")
-    static let label = Color(hex: "787878")
     static let distraction = Color(hex: "FA8282")
+    static let distractionDark = Color(hex: "FF6849")
     static let focusText = Color(hex: "628CFF")
     static let distractionText = Color(hex: "FC675F")
-    static let inactiveTail = Color(hex: "D9D9D9").opacity(0.72)
-    static let inactiveIcon = Color(hex: "AAAAAA")
     static let focusLegendContentWidth: CGFloat = 211.94
     static let focusLegendItemSpacing: CGFloat = 6
+  }
+
+  /// "Focus" / "Distraction budget" captions.
+  private var labelColor: Color {
+    theme.isDark ? theme.textSecondary : theme.textTertiary
+  }
+
+  private var distractionFill: Color {
+    theme.isDark ? Design.distractionDark : Design.distraction
+  }
+
+  private var inactiveTail: Color {
+    theme.targetsTrackFill.opacity(0.72)
   }
 
   private var distractionUsedRatio: Double {
@@ -82,38 +98,58 @@ struct DayGoalHeader: View {
     hasInitializedDisplayedProgress ? displayedDistractedDuration : distractedDuration
   }
 
+  private var progressInputs: ProgressInputs {
+    ProgressInputs(
+      focusTargetDuration: focusTargetDuration,
+      focusDuration: focusDuration,
+      focusCategories: focusCategories,
+      distractionLimitDuration: distractionLimitDuration,
+      distractedDuration: distractedDuration,
+      showsDisabledState: showsDisabledState
+    )
+  }
+
   private var statusText: String {
     switch recordingControlMode {
     case .active:
-      return "Tracking progress from your focus and distraction categories."
+      return String(localized: "Tracking progress from your focus and distraction categories.")
     case .pausedTimed, .pausedIndefinite:
-      return "Dayflow is paused. Resume to continue tracking your progress."
+      return String(localized: "Dayflow is paused. Resume to continue tracking your progress.")
     case .stopped:
-      return "Start Dayflow to continue tracking your progress."
+      return String(localized: "Start Dayflow to continue tracking your progress.")
     }
   }
 
   var body: some View {
-    GeometryReader { geometry in
-      let xOffset = max((geometry.size.width - 360) / 2, 0)
+    ZStack(alignment: .topLeading) {
+      ZStack(alignment: .topLeading) {
+        theme.targetsFill
+        activeContent
+      }
+      .opacity(showsDisabledState ? 0 : 1)
+      .animation(nil, value: showsDisabledState)
+      .allowsHitTesting(!showsDisabledState)
+      .accessibilityHidden(showsDisabledState)
 
       ZStack(alignment: .topLeading) {
-        if showsDisabledState {
-          Design.disabledBackground
-          disabledContent(xOffset: xOffset)
-        } else {
-          Design.panelBackground
-          activeContent(xOffset: xOffset)
-        }
+        theme.targetsFill
+        disabledContent
       }
-      .frame(maxWidth: .infinity, maxHeight: .infinity)
-      .overlay(alignment: .bottom) {
-        Rectangle()
-          .fill(showsDisabledState ? Design.disabledBorder : Design.border)
-          .frame(height: 1)
-      }
+      .opacity(showsDisabledState ? 1 : 0)
+      .animation(nil, value: showsDisabledState)
+      .allowsHitTesting(showsDisabledState)
+      .accessibilityHidden(!showsDisabledState)
     }
+    .frame(width: 360, height: 213, alignment: .topLeading)
+    .frame(maxWidth: .infinity, alignment: .topLeading)
     .frame(height: 213)
+    .clipped()
+    .overlay(InnerGlow(shape: Rectangle(), color: theme.panelInnerGlow.opacity(0.5), radius: 3))
+    .overlay(alignment: .bottom) {
+      Rectangle()
+        .fill(theme.targetsBorder)
+        .frame(height: 1)
+    }
     .accessibilityElement(children: .contain)
     .onAppear {
       initializeDisplayedProgressIfNeeded()
@@ -124,6 +160,8 @@ struct DayGoalHeader: View {
     .onDisappear {
       focusAnimationTask?.cancel()
       focusAnimationTask = nil
+      distractionCleanupTask?.cancel()
+      distractionCleanupTask = nil
     }
     .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification))
     { _ in
@@ -135,47 +173,39 @@ struct DayGoalHeader: View {
     ) { _ in
       isAppActive = false
     }
-    .onChange(of: focusDuration) {
-      handleProgressInputsChanged()
-    }
-    .onChange(of: focusCategories) {
-      handleProgressInputsChanged()
-    }
-    .onChange(of: distractedDuration) {
-      handleProgressInputsChanged()
-    }
-    .onChange(of: focusTargetDuration) {
-      handleProgressInputsChanged()
-    }
-    .onChange(of: distractionLimitDuration) {
-      handleProgressInputsChanged()
-    }
-    .onChange(of: showsDisabledState) {
+    .onChange(of: progressInputs) { _, _ in
       handleProgressInputsChanged()
     }
   }
 
   @ViewBuilder
-  private func activeContent(xOffset: CGFloat) -> some View {
+  private var activeContent: some View {
     Text("Today’s targets")
-      .font(.custom("Instrument Serif", size: 24))
-      .foregroundColor(Design.title)
+      .font(.custom("InstrumentSerif-Regular", size: 24))
+      .foregroundColor(theme.textPrimary)
       .lineLimit(1)
       .fixedSize()
-      .offset(x: xOffset + 17, y: 18.96)
+      .offset(x: 17, y: 18.96)
 
-    setGoalsButton
-      .offset(x: xOffset + 270.75, y: 12)
+    // Figma: once goals exist, the header shows a small edit circle instead
+    // of the "Set goals" pill.
+    CategoryEditCircleButton(
+      action: onSetGoals,
+      diameter: 20,
+      accessibilityLabel: String(localized: "Edit goals")
+    )
+    .offset(x: 323, y: 22.25)
 
     Text(statusText)
       .font(.custom("Figtree", size: 11))
-      .foregroundColor(Design.subtitle)
-      .lineLimit(1)
-      .fixedSize()
-      .offset(x: xOffset + 17, y: 55.68)
+      .foregroundColor(theme.textSecondary)
+      .lineLimit(2)
+      .frame(width: 310, alignment: .leading)
+      .fixedSize(horizontal: false, vertical: true)
+      .offset(x: 17, y: 55.68)
 
     focusLabels
-      .offset(x: xOffset, y: 88)
+      .offset(x: 0, y: 88)
 
     FocusTargetProgressBar(
       categories: renderedFocusCategories,
@@ -183,14 +213,14 @@ struct DayGoalHeader: View {
       actualDuration: renderedFocusDuration
     )
     .frame(width: 269, height: 14)
-    .offset(x: xOffset + 39, y: 106.04)
+    .offset(x: 39, y: 106.04)
 
     focusLegend
-      .offset(x: xOffset + 38, y: 120)
+      .offset(x: 38, y: 120)
 
     TargetIconBubble(kind: .focus)
       .frame(width: 36, height: 36)
-      .offset(x: xOffset + 11, y: 102)
+      .offset(x: 11, y: 102)
 
     distractionRow
       .modifier(
@@ -200,7 +230,7 @@ struct DayGoalHeader: View {
           animatableData: distractionImpactToken
         )
       )
-      .offset(x: xOffset, y: 158)
+      .offset(x: 0, y: 158)
   }
 
   private var distractionRow: some View {
@@ -210,7 +240,7 @@ struct DayGoalHeader: View {
 
       DistractionLimitBar(
         usedRatio: distractionUsedRatio,
-        color: Design.distraction,
+        color: distractionFill,
         loss: distractionLoss
       )
       .frame(width: 259, height: 14)
@@ -241,7 +271,7 @@ struct DayGoalHeader: View {
 
       Text("Distraction budget")
         .font(.custom("Figtree", size: 11))
-        .foregroundColor(Design.label)
+        .foregroundColor(labelColor)
         .lineLimit(1)
         .fixedSize()
         .layoutPriority(1)
@@ -251,23 +281,23 @@ struct DayGoalHeader: View {
   }
 
   @ViewBuilder
-  private func disabledContent(xOffset: CGFloat) -> some View {
+  private var disabledContent: some View {
     Text("Set today’s goals")
-      .font(.custom("Instrument Serif", size: 24))
-      .foregroundColor(Design.title)
+      .font(.custom("InstrumentSerif-Regular", size: 24))
+      .foregroundColor(theme.textPrimary)
       .lineLimit(1)
       .fixedSize()
-      .offset(x: xOffset + 17, y: 18.96)
+      .offset(x: 17, y: 18.96)
 
     setGoalsButton
-      .offset(x: xOffset + 268, y: 18.96)
+      .offset(x: 268, y: 18.96)
 
     Text("Set your goals for today to activate the progress bars below.")
       .font(.custom("Figtree", size: 11))
-      .foregroundColor(Design.subtitle)
+      .foregroundColor(theme.textSecondary)
       .lineLimit(1)
       .fixedSize()
-      .offset(x: xOffset + 17, y: 61.98)
+      .offset(x: 17, y: 61.98)
 
     InactiveGoalTrack(
       width: 269,
@@ -276,16 +306,16 @@ struct DayGoalHeader: View {
       fillOffsetX: 0,
       fillOffsetY: 3
     )
-    .offset(x: xOffset + 39, y: 98.04)
+    .offset(x: 39, y: 98.04)
 
     TargetLegendTail()
-      .fill(Design.inactiveTail)
+      .fill(inactiveTail)
       .frame(width: 236.213, height: 14)
-      .offset(x: xOffset + 34.06, y: 112)
+      .offset(x: 34.06, y: 112)
 
-    TargetIconBubble(kind: .focus, tint: Design.inactiveIcon)
+    TargetIconBubble(kind: .focus, tint: theme.textMuted)
       .frame(width: 36, height: 36)
-      .offset(x: xOffset + 11, y: 94)
+      .offset(x: 11, y: 94)
 
     InactiveGoalTrack(
       width: 259,
@@ -294,47 +324,35 @@ struct DayGoalHeader: View {
       fillOffsetX: 8.71,
       fillOffsetY: 4
     )
-    .offset(x: xOffset + 57.25, y: 141.65)
+    .offset(x: 57.25, y: 141.65)
 
     TargetLegendTail()
-      .fill(Design.inactiveTail)
+      .fill(inactiveTail)
       .frame(width: 236.213, height: 14)
       .scaleEffect(x: -1, y: 1)
-      .offset(x: xOffset + 80.04, y: 157.62)
+      .offset(x: 80.04, y: 157.62)
 
-    TargetIconBubble(kind: .distraction, tint: Design.inactiveIcon)
+    TargetIconBubble(kind: .distraction, tint: theme.textMuted)
       .frame(width: 36, height: 36)
-      .offset(x: xOffset + 305.25, y: 137.65)
+      .offset(x: 305.25, y: 137.65)
   }
 
   private var setGoalsButton: some View {
     Button(action: onSetGoals) {
       Text("Set goals")
         .font(.custom("Figtree", size: 12).weight(.medium))
-        .foregroundColor(.white)
+        .foregroundColor(theme.primaryButtonText)
         .lineLimit(1)
         .fixedSize()
         .padding(.horizontal, 12)
         .frame(height: 30)
-        .background(
-          LinearGradient(
-            colors: [
-              Color(hex: "FFB18D").opacity(0.6),
-              Color(hex: "FFB18D"),
-              Color(hex: "FFA46F"),
-              Color(hex: "FFB18D"),
-            ],
-            startPoint: .top,
-            endPoint: .bottom
-          )
-        )
+        .background(theme.primaryButtonFill)
         .clipShape(Capsule())
+        .overlay(InnerGlow(shape: Capsule(), color: theme.primaryButtonInnerGlow, radius: 3))
         .overlay(
           Capsule()
-            .stroke(Color(hex: "F2D2BD"), lineWidth: 1.25)
+            .strokeBorder(theme.primaryButtonBorder, lineWidth: 1)
         )
-        .shadow(color: Color.white.opacity(0.5), radius: 4, x: -3, y: 0)
-        .shadow(color: Color.white.opacity(0.5), radius: 4, x: 3, y: 0)
     }
     .buttonStyle(DayflowPressScaleButtonStyle(pressedScale: 0.97))
     .hoverScaleEffect(scale: 1.02)
@@ -346,7 +364,7 @@ struct DayGoalHeader: View {
     ZStack(alignment: .topLeading) {
       Text("Focus")
         .font(.custom("Figtree", size: 11))
-        .foregroundColor(Design.label)
+        .foregroundColor(labelColor)
         .lineLimit(1)
         .fixedSize()
         .offset(x: 49, y: 2.5)
@@ -369,7 +387,7 @@ struct DayGoalHeader: View {
   private var focusLegend: some View {
     ZStack(alignment: .leading) {
       TargetLegendTail()
-        .fill(Color(hex: "D9D9D9").opacity(0.72))
+        .fill(inactiveTail)
         .frame(width: 232.277, height: 14)
 
       HStack(spacing: Design.focusLegendItemSpacing) {
@@ -416,7 +434,7 @@ struct DayGoalHeader: View {
   }
 
   private var focusSummarySuffix: String {
-    "/ \(formatCompactHours(focusTargetDuration)) hr fulfilled"
+    String(localized: "/ \(formatCompactHours(focusTargetDuration)) hr fulfilled")
   }
 
   private var distractionSummaryValue: String {
@@ -439,35 +457,15 @@ struct DayGoalHeader: View {
     if abs(hours.rounded() - hours) < 0.01 {
       return "\(Int(hours.rounded()))"
     }
-    return String(format: "%.1f", hours)
+    return hours.formatted(.number.precision(.fractionLength(1)))
   }
 
   private func formatUsedDuration(_ duration: TimeInterval) -> String {
-    let totalMinutes = Int(duration / 60)
-    if totalMinutes < 60 {
-      return "\(totalMinutes) mins"
-    }
-
-    let hours = totalMinutes / 60
-    let minutes = totalMinutes % 60
-    if minutes == 0 {
-      return hours == 1 ? "1 hour" : "\(hours) hours"
-    }
-    return "\(hours)h \(minutes)m"
+    LocalizedDuration.string(duration, style: .abbreviated)
   }
 
   private func formatLimitDuration(_ duration: TimeInterval) -> String {
-    let totalMinutes = Int(duration / 60)
-    let hours = totalMinutes / 60
-    let minutes = totalMinutes % 60
-
-    if hours > 0 && minutes == 0 {
-      return hours == 1 ? "1 hour" : "\(hours) hours"
-    }
-    if hours > 0 {
-      return "\(hours)h \(minutes)m"
-    }
-    return "\(totalMinutes) mins"
+    LocalizedDuration.string(duration, style: .abbreviated)
   }
 
   private func initializeDisplayedProgressIfNeeded() {
@@ -496,6 +494,8 @@ struct DayGoalHeader: View {
   private func setDisplayedProgressImmediately() {
     focusAnimationTask?.cancel()
     focusAnimationTask = nil
+    distractionCleanupTask?.cancel()
+    distractionCleanupTask = nil
     displayedFocusDuration = focusDuration
     displayedFocusCategories = focusCategories
     displayedDistractedDuration = distractedDuration
@@ -584,16 +584,22 @@ struct DayGoalHeader: View {
 
     if didSpendDistractionTime {
       let token = distractionLoss?.token
-      Task { @MainActor in
+      distractionCleanupTask?.cancel()
+      distractionCleanupTask = Task { @MainActor in
         try? await Task.sleep(nanoseconds: 760_000_000)
+        guard !Task.isCancelled else { return }
         guard token == distractionLoss?.token else { return }
         distractionLoss = nil
+        distractionCleanupTask = nil
       }
     }
   }
 }
 
 private struct GoalMetricSummaryText: View {
+  @Environment(\.dayflowTheme) private var theme
+  @Environment(\.stylePreviewAfter) private var stylePreviewAfter
+
   let value: String
   let suffix: String
   let accent: Color
@@ -605,7 +611,7 @@ private struct GoalMetricSummaryText: View {
     HStack(alignment: .firstTextBaseline, spacing: 2) {
       if isProminent {
         Text(value)
-          .font(.custom("Nunito", size: 16).weight(.bold))
+          .font(.custom(stylePreviewAfter ? "Figtree" : "Nunito", size: 16).weight(.bold))
           .foregroundStyle(
             LinearGradient(
               colors: [gradientStart, gradientEnd],
@@ -620,14 +626,19 @@ private struct GoalMetricSummaryText: View {
       }
 
       Text(suffix)
-        .font(.custom(isProminent ? "Nunito" : "Figtree", size: 11))
-        .foregroundColor(Color(hex: "787878"))
+        .font(
+          .custom(
+            stylePreviewAfter ? "Figtree" : (isProminent ? "Nunito" : "Figtree"), size: 11)
+        )
+        .foregroundColor(theme.isDark ? theme.textSecondary : theme.textTertiary)
     }
     .lineLimit(1)
   }
 }
 
 private struct FocusTargetProgressBar: View {
+  @Environment(\.dayflowTheme) private var theme
+
   let categories: [TargetCategoryProgress]
   let targetDuration: TimeInterval
   let actualDuration: TimeInterval
@@ -650,7 +661,7 @@ private struct FocusTargetProgressBar: View {
 
       ZStack(alignment: .leading) {
         trackShape
-          .fill(isFulfilled ? Color(hex: "ECECEC") : Color(hex: "E7E7E7"))
+          .fill(theme.targetsTrackFill)
           .shadow(
             color: isFulfilled ? Color(hex: "628CFF").opacity(0.5) : .clear,
             radius: isFulfilled ? 3 : 0,
@@ -659,7 +670,10 @@ private struct FocusTargetProgressBar: View {
           )
           .overlay(
             trackShape
-              .stroke(isFulfilled ? Color(hex: "91AEFF").opacity(0.9) : .clear, lineWidth: 0.5)
+              .stroke(
+                isFulfilled ? Color(hex: "91AEFF").opacity(0.9) : theme.targetsTrackBorder,
+                lineWidth: 0.5
+              )
           )
 
         HStack(spacing: segmentSpacing) {
@@ -737,6 +751,8 @@ private struct DistractionLossSnapshot: Equatable {
 }
 
 private struct DistractionLimitBar: View {
+  @Environment(\.dayflowTheme) private var theme
+
   let usedRatio: Double
   let color: Color
   let loss: DistractionLossSnapshot?
@@ -757,7 +773,11 @@ private struct DistractionLimitBar: View {
 
       ZStack(alignment: .leading) {
         RoundedRectangle(cornerRadius: 2)
-          .fill(Color(hex: "E7E7E7"))
+          .fill(theme.targetsTrackFill)
+          .overlay(
+            RoundedRectangle(cornerRadius: 2)
+              .stroke(theme.targetsTrackBorder, lineWidth: 0.5)
+          )
 
         RoundedRectangle(cornerRadius: 6)
           .fill(color)
@@ -831,6 +851,8 @@ private struct GoalTrackerImpactShake: GeometryEffect {
 }
 
 private struct InactiveGoalTrack: View {
+  @Environment(\.dayflowTheme) private var theme
+
   let width: CGFloat
   let height: CGFloat
   let fillWidth: CGFloat
@@ -840,11 +862,11 @@ private struct InactiveGoalTrack: View {
   var body: some View {
     ZStack(alignment: .topLeading) {
       RoundedRectangle(cornerRadius: 2)
-        .fill(Color(hex: "E4E4E4"))
+        .fill(theme.targetsInactiveTrack)
         .frame(width: width, height: height)
 
       Capsule()
-        .fill(Color(hex: "F6F6F6"))
+        .fill(theme.targetsInactiveFill)
         .frame(width: fillWidth, height: 6)
         .offset(x: fillOffsetX, y: fillOffsetY)
     }
@@ -853,6 +875,8 @@ private struct InactiveGoalTrack: View {
 }
 
 private struct TargetLegendItem: View {
+  @Environment(\.dayflowTheme) private var theme
+
   let category: TargetCategoryProgress
 
   var body: some View {
@@ -863,7 +887,7 @@ private struct TargetLegendItem: View {
 
       Text(category.name)
         .font(.custom("Figtree", size: 8).weight(.medium))
-        .foregroundColor(Color(hex: "333333"))
+        .foregroundColor(theme.textPrimary)
         .lineLimit(1)
         .fixedSize()
     }
@@ -876,26 +900,33 @@ private struct TargetIconBubble: View {
     case distraction
   }
 
+  @Environment(\.dayflowTheme) private var theme
+  @Environment(\.stylePreviewAfter) private var stylePreviewAfter
+
   let kind: Kind
   var tint: Color? = nil
 
   var body: some View {
     ZStack {
       Circle()
-        .fill(tint == nil ? Color(hex: "E7E7E7") : Color(hex: "E4E4E4"))
+        .fill(theme.targetsBubbleFill)
         .overlay(
           Circle()
-            .stroke(tint == nil ? Color(hex: "FCF9F6") : .white, lineWidth: 2)
+            .stroke(theme.targetsBubbleBorder, lineWidth: theme.isDark ? 0.75 : 1)
         )
 
       switch kind {
       case .focus:
         assetImage("DayGoalFocus")
-          .frame(width: 25, height: 26)
+          .frame(
+            width: stylePreviewAfter ? 20 : 25,
+            height: stylePreviewAfter ? 20 : 26)
 
       case .distraction:
         assetImage("DayGoalDistraction")
-          .frame(width: 23, height: 23)
+          .frame(
+            width: stylePreviewAfter ? 20 : 23,
+            height: stylePreviewAfter ? 20 : 23)
       }
     }
   }

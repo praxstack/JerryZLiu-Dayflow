@@ -24,10 +24,18 @@ struct LoginShellRunner {
     return URL(fileURLWithPath: "/bin/zsh")
   }
 
-  /// Get names of all MCP servers configured in Codex CLI.
+  /// Get names of the currently enabled MCP servers configured in Codex CLI.
   /// Used to generate `--config mcp_servers.<name>.enabled=false` flags.
-  static func getCodexMCPServerNames() -> [String] {
-    let result = run("codex mcp list --json", timeout: 10)
+  ///
+  /// Already-disabled servers are skipped: they don't need a disable flag, and
+  /// plugin-registered ones (e.g. the ChatGPT app's `codex_app`) have no
+  /// config.toml entry, so an override for them creates a partial
+  /// `mcp_servers.<name>` table that fails config parsing with
+  /// "invalid transport" — which used to push every run into the temporary
+  /// CODEX_HOME fallback and lose resumable sessions.
+  static func getCodexMCPServerNames(executableURL: URL) -> [String] {
+    let command = "\(shellEscape(executableURL.path)) mcp list --json"
+    let result = run(command, timeout: 10)
     guard result.exitCode == 0,
       let data = result.stdout.data(using: .utf8)
     else {
@@ -36,13 +44,15 @@ struct LoginShellRunner {
 
     struct MCPServer: Codable {
       let name: String
+      // Older codex versions may omit the field; treat missing as enabled.
+      var enabled: Bool? = true
     }
 
     guard let servers = try? JSONDecoder().decode([MCPServer].self, from: data) else {
       return []
     }
 
-    return servers.map { $0.name }
+    return servers.filter { $0.enabled ?? true }.map { $0.name }
   }
 
   /// Run a command via login shell and wait for completion.
@@ -96,12 +106,20 @@ struct LoginShellRunner {
 
   /// Check if a CLI tool is installed by running `tool --version`
   static func isInstalled(_ toolName: String) -> Bool {
+    if toolName == "codex" {
+      return CodexExecutableResolver.shared.resolve() != nil
+    }
+
     let result = run("\(toolName) --version", timeout: 10)
     return result.exitCode == 0
   }
 
   /// Get version string of a CLI tool, or nil if not installed
   static func version(of toolName: String) -> String? {
+    if toolName == "codex" {
+      return CodexExecutableResolver.shared.resolve()?.versionSummary
+    }
+
     let result = run("\(toolName) --version", timeout: 10)
     guard result.exitCode == 0 else { return nil }
     let trimmed = result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)

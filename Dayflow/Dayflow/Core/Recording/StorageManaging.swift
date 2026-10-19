@@ -42,6 +42,7 @@ protocol StorageManaging: Sendable {
   func fetchRecentTimelineCardsForDebug(limit: Int) -> [TimelineCardDebugEntry]
 
   func updateTimelineCardCategory(cardId: Int64, category: String)
+  func updateTimelineCardTitle(cardId: Int64, title: String)
 
   // Timeline review ratings (time-based)
   func fetchReviewRatingSegments(overlapping startTs: Int, endTs: Int)
@@ -87,11 +88,18 @@ protocol StorageManaging: Sendable {
 
   // MARK: - Screenshot Management (new - replaces video chunks)
 
-  /// Returns the next screenshot file URL (.jpg)
-  func nextScreenshotURL() -> URL
+  /// Returns the URL for a new HEVC segment file
+  func nextSegmentURL() -> URL
 
-  /// Save a screenshot to the database, returns the screenshot ID
-  func saveScreenshot(url: URL, capturedAt: Date, idleSecondsAtCapture: Int?) -> Int64?
+  /// Records one frame of a segment, returns the screenshot ID
+  func saveScreenshot(
+    segmentPath: String, frameIndex: Int, capturedAt: Date, idleSecondsAtCapture: Int?
+  ) -> Int64?
+
+  /// Segment lifecycle bookkeeping used by FrameStore
+  func updateScreenshotFileSizes(segmentPath: String, totalBytes: Int64)
+  func markScreenshotsDeleted(segmentPath: String)
+  func mostRecentSegmentPath() -> String?
 
   /// Fetch screenshots that haven't been assigned to a batch yet
   func fetchUnprocessedScreenshots(since oldestTimestamp: Int) -> [Screenshot]

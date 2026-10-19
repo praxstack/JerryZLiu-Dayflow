@@ -16,11 +16,26 @@ final class NotificationBadgeManager: ObservableObject {
 
   static let shared = NotificationBadgeManager()
 
-  /// Whether there's a pending journal reminder the user hasn't acknowledged
-  @Published private(set) var hasPendingJournalReminder: Bool = false
-
   /// Whether there's a visible Daily badge the user hasn't acknowledged yet.
   @Published private(set) var hasPendingDailyRecap: Bool = false
+
+  @Published private(set) var supportUnreadCount = UserDefaults.standard.integer(
+    forKey: "support.unreadCount")
+
+  func setSupportUnreadCount(_ count: Int) {
+    supportUnreadCount = count
+    defaults.set(count, forKey: "support.unreadCount")
+    refreshDockBadge()
+  }
+
+  @Published private(set) var flowWaitlistUnreadCount = 0
+  private(set) var flowWaitlistSessionKey: String?
+
+  func setFlowWaitlistUnreadCount(_ count: Int, sessionKey: String?) {
+    flowWaitlistSessionKey = sessionKey
+    flowWaitlistUnreadCount = max(0, count)
+    refreshDockBadge()
+  }
 
   private let defaults = UserDefaults.standard
   private let pendingDailyReadyKey = "notificationBadge.pendingDailyReady"
@@ -36,18 +51,6 @@ final class NotificationBadgeManager: ObservableObject {
   }
 
   // MARK: - Public Methods
-
-  /// Shows the journal reminder badge in both the Dock and sidebar.
-  func showJournalBadge() {
-    hasPendingJournalReminder = true
-    refreshDockBadge()
-  }
-
-  /// Clears the journal reminder badge from both the Dock and sidebar.
-  func clearJournalBadge() {
-    hasPendingJournalReminder = false
-    refreshDockBadge()
-  }
 
   /// Tracks that a Daily recap is ready and shows its visible badge.
   func registerDailyRecapReady(forDay day: String) {
@@ -75,8 +78,8 @@ final class NotificationBadgeManager: ObservableObject {
   }
 
   private func refreshDockBadge() {
-    let hasPendingBadge = hasPendingJournalReminder || hasPendingDailyRecap
-    NSApplication.shared.dockTile.badgeLabel = hasPendingBadge ? "1" : nil
+    let count = supportUnreadCount + flowWaitlistUnreadCount + (hasPendingDailyRecap ? 1 : 0)
+    NSApplication.shared.dockTile.badgeLabel = count > 0 ? String(count) : nil
   }
 
   private func clearPendingDailyRecap() {

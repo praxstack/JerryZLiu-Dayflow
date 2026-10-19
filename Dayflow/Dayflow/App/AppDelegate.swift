@@ -11,9 +11,11 @@ import ServiceManagement
 @MainActor
 class AppDelegate: NSObject, NSApplicationDelegate {
   enum PendingNotificationNavigationDestination: Equatable {
-    case journal
     case daily(day: String?)
     case weekly
+    case support
+    case flow
+    case timeline
   }
 
   // Controls whether the app is allowed to terminate.
@@ -36,6 +38,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
   private var appLaunchDate: Date?
   private var foregroundStartTime: Date?
   private var referralUsageStartedAt: Date?
+  private var analyticsConfigured = false
 
   override init() {
     UserDefaultsMigrator.migrateIfNeeded()
@@ -46,6 +49,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // Block termination by default; only specific flows enable it.
     AppDelegate.allowTermination = false
     applySavedDockIconPreference()
+    #if DEBUG
+      if #available(macOS 15.0, *) { FlowDebugRecorder.shared.install() }
+    #endif
 
     // Configure crash reporting (Sentry) from shared telemetry preference.
     SentryHelper.setEnabled(AnalyticsService.shared.isOptedIn)
@@ -56,10 +62,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     let POSTHOG_HOST = info?["PHPostHogHost"] as? String ?? "https://us.i.posthog.com"
     if !POSTHOG_API_KEY.isEmpty {
       AnalyticsService.shared.start(apiKey: POSTHOG_API_KEY, host: POSTHOG_HOST)
+      analyticsConfigured = true
+      AgentUsageTelemetryQueue.drain()
     }
 
     // App opened (cold start)
     AnalyticsService.shared.capture("app_opened", ["cold_start": true])
+
+    // Agent access: accept CLI/MCP writes if the user enabled edits, and fix
+    // any MCP client config whose recorded path went stale (app was moved).
+    AgentBridgeServer.shared.startIfEnabled()
+    AgentClientRegistration.repairStaleRegistrations()
 
     // Start heartbeat for DAU tracking
     appLaunchDate = Date()
@@ -74,6 +87,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
       let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
       AnalyticsService.shared.capture(
         "app_updated", ["from_version": last, "to_version": "\(version) (\(build))"])
+      CLIAutoUpdater.updateProviderCLIs()
     }
     UserDefaults.standard.set(build, forKey: "lastRunBuild")
     statusBar = StatusBarController()
@@ -112,32 +126,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
           return
         }
 
-        do {
-          // Check if we have permission by trying to access content
-          _ = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
-          // Permission granted - restore saved preference or default to ON
-          await MainActor.run {
-            let savedPref = AppState.shared.getSavedPreference()
-            AppState.shared.setRecording(savedPref ?? true, analyticsReason: "auto")
-          }
-          let finalState = await MainActor.run { AppState.shared.isRecording }
-          AnalyticsService.shared.capture(
-            "recording_toggled", ["enabled": finalState, "reason": "auto"])
-        } catch {
-          // No permission or error - don't start recording
-          // User will need to grant permission in onboarding
-          await MainActor.run {
-            AppState.shared.setRecording(
-              false,
-              analyticsReason: "auto",
-              persistPreference: false
-            )
-          }
-          if didOnboard {
-            ScreenRecordingPermissionNotice.post(reason: "launch_shareable_content_failed")
-          }
-          print("Screen recording permission not granted, skipping auto-start")
+        // Permission granted - restore saved preference or default to ON.
+        // No extra SCShareableContent probe here: every ScreenCaptureKit call makes
+        // macOS re-check the grant (issue #381), and the recorder's own start
+        // retries with backoff if capture really can't begin.
+        await MainActor.run {
+          let savedPref = AppState.shared.getSavedPreference()
+          AppState.shared.setRecording(savedPref ?? true, analyticsReason: "auto")
         }
+        let finalState = await MainActor.run { AppState.shared.isRecording }
+        AnalyticsService.shared.capture(
+          "recording_toggled", ["enabled": finalState, "reason": "auto"])
         self.flushPendingDeepLinks()
       }
     } else {
@@ -147,17 +146,24 @@ class AppDelegate: NSObject, NSApplicationDelegate {
       flushPendingDeepLinks()
     }
 
-    // Start the Gemini analysis background job
-    setupGeminiAnalysis()
+    // Start the provider-routed analysis background job
+    setupTimelineAnalysis()
 
     // Start inactivity monitoring for idle reset
     InactivityMonitor.shared.start()
 
-    // Start notification service for journal reminders
+    // Start Daily and Weekly notifications and retire legacy Journal reminders
     NotificationService.shared.start()
+    DayflowAuthManager.shared.loadStoredSessionIfNeeded()
+    SupportChatSession.shared.start()
+    SupportChatSession.startFlowWaitlistMonitoring()
 
     // Start daily recap generation scheduler (checks every 5 minutes)
     DailyRecapScheduler.shared.start()
+
+    // Flow desktop overlay (creature toasts/nudges) tracks the session mirror
+    FlowOverlayController.shared.start()
+    FlowEarlyBirdController.shared.start()
 
     // Observe recording state
     analyticsSub = AppState.shared.$isRecording
@@ -194,6 +200,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let enabled =
           notification.userInfo?["enabled"] as? Bool ?? AnalyticsService.shared.isOptedIn
         self.updateCPUMonitoring(analyticsEnabled: enabled)
+        if enabled, self.analyticsConfigured {
+          AgentUsageTelemetryQueue.drain()
+        } else if !enabled {
+          AgentUsageTelemetryQueue.discard()
+        }
       }
     }
 
@@ -223,7 +234,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
       queue: .main
     ) { [weak self] _ in
       MainActor.assumeIsolated {
-        self?.foregroundStartTime = Date()
+        guard let self else { return }
+        self.foregroundStartTime = Date()
+        if self.analyticsConfigured {
+          AgentUsageTelemetryQueue.drain()
+        }
       }
     }
 
@@ -251,23 +266,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     NSApp.setActivationPolicy(showDockIcon ? .regular : .accessory)
   }
 
-  // Start Gemini analysis as a background task
-  private func setupGeminiAnalysis() {
+  // Start timeline analysis as a background task
+  private func setupTimelineAnalysis() {
     // Perform after a short delay to ensure other initialization completes
     DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
       AnalysisManager.shared.startAnalysisJob()
-      print("AppDelegate: Gemini analysis job started")
+      print("AppDelegate: LLM analysis job started")
+      let providerID = (try? LLMProviderRoutingStore.load())?.primary
       AnalyticsService.shared.capture(
         "analysis_job_started",
         [
-          "provider": {
-            switch LLMProviderType.load() {
-            case .geminiDirect: return "gemini"
-            case .dayflowBackend: return "dayflow"
-            case .ollamaLocal: return "ollama"
-            case .chatGPTClaude: return "chat_cli"
-            }
-          }()
+          "provider": providerID?.analyticsName ?? "unknown",
+          "provider_id": providerID?.rawValue ?? "unknown",
         ])
     }
   }
@@ -339,7 +349,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
   }
 
   private func sendHeartbeat() {
+    if analyticsConfigured {
+      AgentUsageTelemetryQueue.drain()
+      CLIVersionTelemetry.refreshIfStale()
+    }
     var props: [String: Any] = [:]
+    let appearance =
+      DayflowAppearance(
+        rawValue: UserDefaults.standard.string(forKey: DayflowAppearance.storageKey) ?? ""
+      ) ?? .system
+    // Match the app root, including onboarding's forced light appearance.
+    let effectiveColorScheme =
+      UserDefaults.standard.bool(forKey: "didOnboard")
+      ? appearance.colorScheme(system: SystemAppearanceObserver.currentColorScheme) : .light
+    props["appearance"] = appearance.rawValue
+    props["effective_appearance"] = effectiveColorScheme == .dark ? "dark" : "light"
     if let launch = appLaunchDate {
       let sessionHours = Date().timeIntervalSince(launch) / 3600
       props["session_hours"] = round(sessionHours * 10) / 10  // 1 decimal place
@@ -360,6 +384,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         props["timeline_mode"] = timelineMode
       }
     }
+    props.merge(ScreenCaptureMonitor.shared.heartbeatPropertiesAndReset()) { _, new in new }
     AnalyticsService.shared.capture("app_heartbeat", props)
     flushReferralUsage(reason: "heartbeat")
   }

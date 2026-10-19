@@ -5,6 +5,7 @@ import SwiftUI
 struct ChatCLITestView: View {
   let selectedTool: CLITool?
   let onTestComplete: (Bool) -> Void
+  var usesOnboardingStyle: Bool = false
 
   let accentColor = Color(red: 0.25, green: 0.17, blue: 0)
   let successAccentColor = Color(red: 0.34, green: 1, blue: 0.45)
@@ -17,17 +18,51 @@ struct ChatCLITestView: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 14) {
       Text("We'll ask your CLI a simple question to verify it's working and signed in.")
-        .font(.custom("Figtree", size: 12))
-        .foregroundColor(SettingsStyle.secondary)
+        .font(.custom("Figtree", size: usesOnboardingStyle ? 16 : 12))
+        .foregroundColor(usesOnboardingStyle ? Color(hex: "898989") : SettingsStyle.secondary)
         .fixedSize(horizontal: false, vertical: true)
 
-      SettingsPrimaryButton(
-        title: isTesting ? "Testing…" : "Test CLI",
-        systemImage: "bolt.fill",
-        isLoading: isTesting,
-        isDisabled: selectedTool == nil,
-        action: runTest
-      )
+      if usesOnboardingStyle {
+        DayflowSurfaceButton(
+          action: runTest,
+          content: {
+            HStack(spacing: 4) {
+              Group {
+                if isTesting {
+                  ProgressView()
+                    .controlSize(.small)
+                    .scaleEffect(0.6)
+                } else {
+                  Image(systemName: "bolt.fill").font(.system(size: 13, weight: .semibold))
+                }
+              }
+              .frame(width: 16, height: 16)
+              Text(isTesting ? String(localized: "Testing…") : String(localized: "Test CLI"))
+                .font(.custom("Figtree", size: 14))
+                .fontWeight(.medium)
+            }
+          },
+          background: Color(hex: "FDCEA4"),
+          foreground: Color(hex: "926244"),
+          borderColor: Color(hex: "F1CEBC"),
+          cornerRadius: 200,
+          horizontalPadding: 24,
+          verticalPadding: 8,
+          fixedHeight: 41,
+          showOverlayStroke: false,
+          innerGlowColor: Color(hex: "FFECE6")
+        )
+        .disabled(isTesting || selectedTool == nil)
+        .opacity(selectedTool == nil ? 0.5 : 1)
+      } else {
+        SettingsPrimaryButton(
+          title: isTesting ? String(localized: "Testing…") : String(localized: "Test CLI"),
+          systemImage: "bolt.fill",
+          isLoading: isTesting,
+          isDisabled: selectedTool == nil,
+          action: runTest
+        )
+      }
 
       if selectedTool == nil {
         Text("Select ChatGPT or Claude above before running the test.")
@@ -36,14 +71,14 @@ struct ChatCLITestView: View {
       }
 
       if success {
-        SettingsStatusDot(state: .good, label: "Test successful.")
+        SettingsStatusDot(state: .good, label: String(localized: "Test successful."))
       } else if let msg = resultMessage {
         VStack(alignment: .leading, spacing: 8) {
           HStack(alignment: .center, spacing: 10) {
             SettingsStatusDot(state: .bad, label: msg)
             if debugOutput != nil {
               SettingsLinkButton(
-                title: "Copy logs",
+                title: String(localized: "Copy logs"),
                 systemImage: nil,
                 action: copyDebugLogs
               )
@@ -73,7 +108,7 @@ struct ChatCLITestView: View {
   func runTest() {
     guard !isTesting else { return }
     guard let tool = selectedTool else {
-      resultMessage = "Pick ChatGPT or Claude first."
+      resultMessage = String(localized: "Pick ChatGPT or Claude first.")
       return
     }
 
@@ -149,13 +184,19 @@ struct ChatCLITestView: View {
               if stderrTrimmed.isEmpty {
                 if tool == .claude {
                   resultMessage =
-                    "Claude CLI returned an error. You may need to sign in — run 'claude login' in Terminal."
+                    String(
+                      localized:
+                        "Claude CLI returned an error. You may need to sign in — run 'claude login' in Terminal."
+                    )
                 } else {
                   resultMessage =
-                    "Codex CLI returned an error. You may need to sign in — run 'codex auth' in Terminal."
+                    String(
+                      localized:
+                        "Codex CLI returned an error. You may need to sign in — run 'codex auth' in Terminal."
+                    )
                 }
               } else {
-                resultMessage = "CLI error: \(stderrTrimmed.prefix(150))"
+                resultMessage = String(localized: "CLI error: \(stderrTrimmed.prefix(150))")
               }
               captureChatCLITestFailed(
                 for: tool,
@@ -173,14 +214,15 @@ struct ChatCLITestView: View {
           let passed = parseForSuccess(cliResult, for: tool)
           success = passed
           if passed {
-            resultMessage = "CLI is working!"
+            resultMessage = String(localized: "CLI is working!")
             captureChatCLITestSucceeded(
               for: tool,
               durationMs: durationMs,
               exitCode: Int(cliResult.exitCode)
             )
           } else if cliResult.stdout.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            resultMessage = "CLI returned empty response. Make sure you're signed in."
+            resultMessage = String(
+              localized: "CLI returned empty response. Make sure you're signed in.")
             captureChatCLITestFailed(
               for: tool,
               durationMs: durationMs,
@@ -276,8 +318,10 @@ struct ChatCLITestView: View {
   }
 
   func chatCLITestAnalyticsProperties(for tool: CLITool) -> [String: Any] {
-    [
-      "provider": "chatgpt_claude",
+    let providerID: LLMProviderID = tool == .claude ? .claude : .chatGPT
+    return [
+      "provider": providerID.analyticsName,
+      "provider_id": providerID.rawValue,
       "tool": tool.rawValue,
       "setup_step": "test",
     ]
@@ -302,7 +346,10 @@ struct ChatCLITestView: View {
         domain: "ChatCLITest", code: 1,
         userInfo: [
           NSLocalizedDescriptionKey:
-            "\(tool.shortName) CLI not found. Install it and run '\(tool == .codex ? "codex auth" : "claude login")' in Terminal."
+            String(
+              localized:
+                "\(tool.shortName) CLI not found. Install it and run '\(tool == .codex ? "codex auth" : "claude login")' in Terminal."
+            )
         ])
     }
 
@@ -310,7 +357,7 @@ struct ChatCLITestView: View {
     let safeWorkingDir = FileManager.default.temporaryDirectory
 
     // Simple math test - deterministic and doesn't require image handling
-    let prompt = "What is 2+2? Answer with just the number."
+    let prompt = String(localized: "What is 2+2? Answer with just the number.")
 
     switch tool {
     case .codex:
@@ -372,9 +419,11 @@ struct ChatCLITestView: View {
     // Return the correct message based on which tool we're actually testing
     switch tool {
     case .claude:
-      return "Claude CLI is not signed in. Run 'claude login' in Terminal to authenticate."
+      return String(
+        localized: "Claude CLI is not signed in. Run 'claude login' in Terminal to authenticate.")
     case .codex:
-      return "Codex CLI is not signed in. Run 'codex auth' in Terminal to authenticate."
+      return String(
+        localized: "Codex CLI is not signed in. Run 'codex auth' in Terminal to authenticate.")
     }
   }
 }
@@ -385,8 +434,8 @@ enum CLITool: String, CaseIterable {
 
   var displayName: String {
     switch self {
-    case .codex: return "ChatGPT (Codex CLI)"
-    case .claude: return "Claude Code"
+    case .codex: return String(localized: "ChatGPT (Codex CLI)")
+    case .claude: return String(localized: "Claude Code")
     }
   }
 
@@ -400,9 +449,9 @@ enum CLITool: String, CaseIterable {
   var subtitle: String {
     switch self {
     case .codex:
-      return "OpenAI's ChatGPT desktop tooling with codex CLI"
+      return String(localized: "OpenAI's ChatGPT desktop tooling with codex CLI")
     case .claude:
-      return "Anthropic's Claude Code command-line helper"
+      return String(localized: "Anthropic's Claude Code command-line helper")
     }
   }
 
@@ -456,15 +505,15 @@ enum CLIDetectionState: Equatable {
   var statusLabel: String {
     switch self {
     case .unknown:
-      return "Not checked"
+      return String(localized: "Not checked")
     case .checking:
-      return "Checking…"
+      return String(localized: "Checking…")
     case .installed:
-      return "Installed"
+      return String(localized: "Installed")
     case .notFound:
-      return "Not installed"
+      return String(localized: "Not installed")
     case .failed:
-      return "Error"
+      return String(localized: "Error")
     }
   }
 

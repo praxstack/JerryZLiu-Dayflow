@@ -23,11 +23,23 @@ struct WeeklyContextChartsSection: View {
     static let xAxisTopSpacing: CGFloat = 8
     static let lineWidth: CGFloat = 2
     static let pointSize: CGFloat = 42
-    static let borderColor = Color(hex: "EBE6E3")
-    static let backgroundColor = Color.white.opacity(0.78)
-    static let footerBackgroundColor = Color.white.opacity(0.58)
-    static let axisColor = Color(hex: "5A534C").opacity(0.9)
-    static let labelColor = Color.black
+    static let borderColor = WeeklyPalette.cardBorder
+    // "After" uses the dark-adjusted context card fill; "Before" keeps the
+    // shipped strong card fill.
+    @MainActor static var backgroundColor: Color {
+      StylePreview.shared.showAfter
+        ? WeeklyPalette.contextCardFill : WeeklyPalette.cardFillStrong
+    }
+    // The card fill is translucent, so stacking more fills on the chart and
+    // footer sections compounds their opacity over the card-level fill. In the
+    // refreshed style the chart section stays clear so the single card-level
+    // fill shows through; the footer uses the shared (tunable) footer fill.
+    @MainActor static var chartSectionBackgroundColor: Color {
+      StylePreview.shared.showAfter ? .clear : WeeklyPalette.cardFillStrong
+    }
+    @MainActor static var footerBackgroundColor: Color { WeeklyPalette.footerSectionFill }
+    static let axisColor = WeeklyPalette.axis
+    static let labelColor = WeeklyPalette.text
   }
 
   private var chartWidth: CGFloat {
@@ -38,13 +50,13 @@ struct WeeklyContextChartsSection: View {
     [
       WeeklyContextLineSeries(
         id: "distractions",
-        label: "Number of times distracted",
+        label: String(localized: "Number of times distracted"),
         colorHex: "FF8A8A",
         values: snapshot.comparison.days.map(\.distracted)
       ),
       WeeklyContextLineSeries(
         id: "context-shifts",
-        label: "Number of context shifts",
+        label: String(localized: "Number of context shifts"),
         colorHex: "A78CFF",
         values: snapshot.comparison.days.map(\.shifts)
       ),
@@ -61,7 +73,7 @@ struct WeeklyContextChartsSection: View {
       VStack(alignment: .leading, spacing: Design.chartTopSpacing) {
         Text("Context shift and distractions comparison")
           .font(.custom("InstrumentSerif-Regular", size: 20))
-          .foregroundStyle(Color(hex: "B46531"))
+          .foregroundStyle(WeeklyPalette.title)
           .lineLimit(1)
           .minimumScaleFactor(0.82)
           .padding(.bottom, Design.titleSpacing - Design.chartTopSpacing)
@@ -72,10 +84,10 @@ struct WeeklyContextChartsSection: View {
       .padding(.top, Design.topPadding)
       .padding(.horizontal, Design.horizontalPadding)
       .frame(width: width, height: Design.height - Design.footerHeight, alignment: .topLeading)
-      .background(Design.backgroundColor)
+      .background(Design.chartSectionBackgroundColor)
       .overlay(alignment: .bottom) {
         Rectangle()
-          .fill(Color(hex: "EBE6E3"))
+          .fill(WeeklyPalette.cardBorder)
           .frame(height: 1)
       }
 
@@ -184,7 +196,7 @@ struct WeeklyContextChartsSection: View {
 
       Text(snapshot.comparison.insight)
         .font(.custom("Figtree-Regular", size: 14))
-        .foregroundStyle(Color.black)
+        .foregroundStyle(WeeklyPalette.text)
         .lineLimit(2)
         .minimumScaleFactor(0.82)
 
@@ -214,7 +226,7 @@ private struct WeeklyContextDistributionCard: View {
     static let plotHeight: CGFloat = 283
     static let contextColor = Color(hex: "B097FF")
     static let distractionColor = Color(hex: "FF7C5A")
-    static let axisColor = Color(hex: "C9C2BC")
+    static let axisColor = WeeklyPalette.axisSoft
   }
 
   init(snapshot: WeeklyContextDistributionSnapshot, width: CGFloat = Design.width) {
@@ -226,20 +238,23 @@ private struct WeeklyContextDistributionCard: View {
     max(Design.plotWidth, width - 124)
   }
 
+  /// Hour ticks from 6 PM down to 10 AM, formatted for the current locale.
   private var hourTicks: [String] {
-    ["6pm", "5pm", "4pm", "3pm", "2pm", "1pm", "12pm", "11am", "10am"]
+    stride(from: 18, through: 10, by: -1).map { hour in
+      WeeklyDashboardBuilder.hourAxisLabel(minuteOfDay: Double(hour * 60))
+    }
   }
 
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
       Text("Context shift and distractions distribution")
         .font(.custom("InstrumentSerif-Regular", size: 18))
-        .foregroundStyle(Color(hex: "B46531"))
+        .foregroundStyle(WeeklyPalette.title)
         .padding(.leading, 25)
         .padding(.top, 18)
 
       HStack(spacing: 24) {
-        legendItem("Context shift", color: Design.contextColor)
+        legendItem(String(localized: "Context shift"), color: Design.contextColor)
         legendItem("Distraction", color: Design.distractionColor)
       }
       .frame(maxWidth: .infinity)
@@ -250,7 +265,7 @@ private struct WeeklyContextDistributionCard: View {
           ForEach(hourTicks, id: \.self) { tick in
             Text(tick)
               .font(.custom("Figtree-Regular", size: 8))
-              .foregroundStyle(Color.black)
+              .foregroundStyle(WeeklyPalette.text)
 
             if tick != hourTicks.last {
               Spacer(minLength: 0)
@@ -268,7 +283,7 @@ private struct WeeklyContextDistributionCard: View {
         ForEach(snapshot.days, id: \.self) { day in
           Text(day)
             .font(.custom("Figtree-Regular", size: 10))
-            .foregroundStyle(Color.black)
+            .foregroundStyle(WeeklyPalette.text)
             .frame(maxWidth: .infinity)
         }
       }
@@ -277,7 +292,7 @@ private struct WeeklyContextDistributionCard: View {
       .padding(.leading, 70)
     }
     .frame(width: width, height: Design.height, alignment: .topLeading)
-    .background(Color.white.opacity(0.75))
+    .background(WeeklyPalette.cardFillStrong)
     .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
   }
 
@@ -335,7 +350,7 @@ private struct WeeklyContextDistributionCard: View {
 
       Text(title)
         .font(.custom("Figtree-Regular", size: 10))
-        .foregroundStyle(Color.black)
+        .foregroundStyle(WeeklyPalette.text)
     }
   }
 }
@@ -350,7 +365,7 @@ private struct WeeklyContextComparisonBarCard: View {
     static let mainHeight: CGFloat = 369
     static let barAreaHeight: CGFloat = 204
     static let maxBarHeight: CGFloat = 180
-    static let axisColor = Color(hex: "C9C2BC")
+    static let axisColor = WeeklyPalette.axisSoft
   }
 
   init(snapshot: WeeklyContextComparisonSnapshot, width: CGFloat = Design.width) {
@@ -367,7 +382,7 @@ private struct WeeklyContextComparisonBarCard: View {
       VStack(alignment: .leading, spacing: 0) {
         Text("Context shift and distractions comparison")
           .font(.custom("InstrumentSerif-Regular", size: 18))
-          .foregroundStyle(Color(hex: "B46531"))
+          .foregroundStyle(WeeklyPalette.title)
           .padding(.top, 22)
           .padding(.leading, 25)
 
@@ -380,10 +395,10 @@ private struct WeeklyContextComparisonBarCard: View {
           .frame(maxWidth: .infinity)
       }
       .frame(width: width, height: Design.mainHeight, alignment: .topLeading)
-      .background(Color.white.opacity(0.75))
+      .background(WeeklyPalette.cardFillStrong)
       .overlay(alignment: .bottom) {
         Rectangle()
-          .fill(Color(hex: "EBE6E3"))
+          .fill(WeeklyPalette.cardBorder)
           .frame(height: 1)
       }
 
@@ -407,7 +422,7 @@ private struct WeeklyContextComparisonBarCard: View {
 
           Text(day.day)
             .font(.custom("Figtree-Regular", size: 12))
-            .foregroundStyle(Color.black)
+            .foregroundStyle(WeeklyPalette.text)
             .padding(.top, 10)
         }
       }
@@ -455,8 +470,12 @@ private struct WeeklyContextComparisonBarCard: View {
 
   private var legend: some View {
     HStack(spacing: 24) {
-      legendItem("Number of times distracted", color: Color(hex: "FF653B"))
-      legendItem("Number of context shifts", color: Color(hex: "A88CFF"))
+      legendItem(
+        String(localized: "Number of times distracted"),
+        color: Color(hex: String(localized: "FF653B")))
+      legendItem(
+        String(localized: "Number of context shifts"),
+        color: Color(hex: String(localized: "A88CFF")))
     }
   }
 
@@ -468,7 +487,7 @@ private struct WeeklyContextComparisonBarCard: View {
 
       Text(title)
         .font(.custom("Figtree-Regular", size: 10))
-        .foregroundStyle(Color.black)
+        .foregroundStyle(WeeklyPalette.text)
     }
   }
 
@@ -482,7 +501,7 @@ private struct WeeklyContextComparisonBarCard: View {
 
         Text(snapshot.insight)
           .font(.custom("Figtree-Regular", size: 12))
-          .foregroundStyle(Color.black)
+          .foregroundStyle(WeeklyPalette.text)
           .lineSpacing(1)
           .frame(maxWidth: .infinity, alignment: .leading)
       }
@@ -491,7 +510,7 @@ private struct WeeklyContextComparisonBarCard: View {
     }
     .padding(.horizontal, 18)
     .frame(width: width, height: 58, alignment: .center)
-    .background(Color(hex: "FAF7F5"))
+    .background(WeeklyPalette.footer)
   }
 }
 
@@ -569,7 +588,8 @@ struct WeeklyContextComparisonSnapshot {
       .init(day: "Sun", distracted: 6, shifts: 8),
     ],
     insight:
-      "Tue had the most interruptions, with 22 context shifts and 53 distractions."
+      String(
+        localized: "Tue had the most interruptions, with 22 context shifts and 53 distractions.")
   )
 }
 
@@ -589,5 +609,5 @@ private func minutes(_ time: String) -> Int {
 #Preview("Context Charts", traits: .fixedLayout(width: 958, height: 427)) {
   WeeklyContextChartsSection(snapshot: .figmaPreview)
     .padding(24)
-    .background(Color(hex: "FBF6EF"))
+    .background(WeeklyPalette.canvas)
 }

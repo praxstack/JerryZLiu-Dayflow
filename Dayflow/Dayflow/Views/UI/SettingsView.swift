@@ -14,6 +14,7 @@ struct SettingsView: View {
     case storage
     case privacy
     case providers
+    case aiTools
     case data
     case other
 
@@ -21,12 +22,13 @@ struct SettingsView: View {
 
     var title: String {
       switch self {
-      case .account: return "Account"
-      case .storage: return "Storage"
-      case .privacy: return "Privacy"
-      case .providers: return "Providers"
-      case .data: return "Export"
-      case .other: return "Other"
+      case .account: return String(localized: "Account")
+      case .storage: return String(localized: "Storage")
+      case .privacy: return String(localized: "Privacy")
+      case .providers: return String(localized: "Providers")
+      case .aiTools: return String(localized: "MCP / CLI")
+      case .data: return String(localized: "Export")
+      case .other: return String(localized: "Other")
       }
     }
   }
@@ -41,26 +43,39 @@ struct SettingsView: View {
   @StateObject private var privacyViewModel = RecordingPrivacySettingsViewModel()
   @StateObject private var providersViewModel = ProvidersSettingsViewModel()
   @StateObject private var otherViewModel = OtherSettingsViewModel()
+  @StateObject private var agentAccessViewModel = AgentAccessViewModel()
 
   var body: some View {
     contentWithSheets
-      .environment(\.colorScheme, .light)
   }
 
   private var contentWithSheets: some View {
     contentWithLifecycle
       .sheet(
         item: Binding(
-          get: { providersViewModel.setupModalProvider.map { ProviderSetupWrapper(id: $0) } },
-          set: { providersViewModel.setupModalProvider = $0?.id }
+          get: {
+            providersViewModel.setupModalProvider.map {
+              ProviderSetupWrapper(providerID: $0)
+            }
+          },
+          set: { wrapper in
+            if let wrapper {
+              providersViewModel.setupModalProvider = wrapper.providerID
+            } else {
+              providersViewModel.cancelProviderSetup()
+            }
+          }
         )
       ) { wrapper in
         LLMProviderSetupView(
-          providerType: wrapper.id,
-          onBack: { providersViewModel.setupModalProvider = nil },
-          onComplete: {
-            providersViewModel.handleProviderSetupCompletion(wrapper.id)
-            providersViewModel.setupModalProvider = nil
+          providerType: wrapper.providerID,
+          onBack: { providersViewModel.cancelProviderSetup() },
+          onComplete: { configuredProviderID in
+            let succeeded = providersViewModel.handleProviderSetupCompletion(configuredProviderID)
+            if succeeded {
+              providersViewModel.cancelProviderSetup()
+            }
+            return succeeded
           }
         )
         .frame(minWidth: 900, minHeight: 650)
@@ -160,7 +175,7 @@ struct SettingsView: View {
     VStack(alignment: .leading, spacing: 0) {
       Text("Settings")
         .font(.custom("InstrumentSerif-Regular", size: 22))
-        .foregroundColor(.black.opacity(0.9))
+        .foregroundColor(SettingsStyle.text)
         .padding(.leading, 10)
         .padding(.bottom, 18)
 
@@ -186,7 +201,7 @@ struct SettingsView: View {
     return VStack(alignment: .leading, spacing: 8) {
       Text("Dayflow v\(version)")
         .font(.custom("Figtree", size: 11))
-        .foregroundColor(.black.opacity(0.4))
+        .foregroundColor(SettingsStyle.meta)
 
       Button {
         NotificationCenter.default.post(name: .showWhatsNew, object: nil)
@@ -198,7 +213,7 @@ struct SettingsView: View {
           Image(systemName: "arrow.up.right")
             .font(.system(size: 9, weight: .semibold))
         }
-        .foregroundColor(Color(red: 0.25, green: 0.17, blue: 0))
+        .foregroundColor(SettingsStyle.ink)
       }
       .buttonStyle(.plain)
       .pointingHandCursor()
@@ -214,14 +229,14 @@ struct SettingsView: View {
       Text(tab.title)
         .font(.custom("Figtree", size: 13))
         .fontWeight(.semibold)
-        .foregroundColor(.black.opacity(selectedTab == tab ? 0.9 : 0.55))
+        .foregroundColor(selectedTab == tab ? SettingsStyle.text : SettingsStyle.secondary)
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, 8)
         .padding(.horizontal, 10)
         .background {
           if selectedTab == tab {
             RoundedRectangle(cornerRadius: 7)
-              .fill(Color.black.opacity(0.06))
+              .fill(SettingsStyle.subtleFill)
               .matchedGeometryEffect(id: "sidebarSelection", in: sidebarSelectionNamespace)
           }
         }
@@ -246,6 +261,8 @@ struct SettingsView: View {
         SettingsRecordingPrivacyTabView(viewModel: privacyViewModel)
       case .providers:
         SettingsProvidersTabView(viewModel: providersViewModel)
+      case .aiTools:
+        SettingsAgentAccessTabView(viewModel: agentAccessViewModel)
       case .data:
         SettingsDataTabView(viewModel: otherViewModel)
       case .other:
@@ -258,7 +275,9 @@ struct SettingsView: View {
 }
 
 private struct ProviderSetupWrapper: Identifiable {
-  let id: String
+  let providerID: LLMProviderID
+
+  var id: String { providerID.rawValue }
 }
 
 struct SettingsView_Previews: PreviewProvider {

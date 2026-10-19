@@ -340,14 +340,6 @@ extension ChatView {
 
   func applySelectedProvider(_ provider: DashboardChatProvider) {
     selectedProviderRaw = provider.rawValue
-    switch provider {
-    case .gemini:
-      break
-    case .codex:
-      chatCLIPreferredTool = "codex"
-    case .claude:
-      chatCLIPreferredTool = "claude"
-    }
   }
 
   func isProviderAvailable(_ provider: DashboardChatProvider) -> Bool {
@@ -382,20 +374,20 @@ extension ChatView {
   var pendingProviderLabel: String {
     switch pendingProviderSelection {
     case .gemini:
-      return "Gemini"
+      return String(localized: "Gemini")
     case .claude:
-      return "Claude"
+      return String(localized: "Claude")
     case .codex:
-      return "Codex"
+      return String(localized: "Codex")
     case .none:
-      return "selected provider"
+      return String(localized: "selected provider")
     }
   }
 
   var providerToggleHelpText: String {
     if selectedProviderAvailable {
-      return "Choose chat provider"
+      return String(localized: "Choose chat provider")
     }
-    return "Configure Gemini key or install Codex/Claude CLI"
+    return String(localized: "Configure Gemini key or install Codex/Claude CLI")
   }
 }

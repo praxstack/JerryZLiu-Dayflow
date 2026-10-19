@@ -26,12 +26,51 @@ final class RetryCoordinator: ObservableObject {
     case .running(let step):
       return "Status: Reprocessing - Step: \(stepLabel(step))\(dots)"
     case .failed:
-      return "Status: Failed - retry stopped"
+      return String(localized: "Status: Failed - retry stopped")
     case .stopped:
-      return "Status: Stopped - earlier batch failed"
+      return String(localized: "Status: Stopped - earlier batch failed")
     case .done:
       return nil
     }
+  }
+
+  func statusLine(for batchIds: [Int64]) -> String? {
+    let batchIds = Array(Set(batchIds))
+    guard !batchIds.isEmpty else { return nil }
+    if batchIds.count == 1 {
+      return statusLine(for: batchIds[0])
+    }
+
+    if let activeBatchId, batchIds.contains(activeBatchId) {
+      return statusLine(for: activeBatchId)
+    }
+
+    let groupStatuses = batchIds.compactMap { statuses[$0] }
+    guard !groupStatuses.isEmpty else { return nil }
+
+    if groupStatuses.contains(.failed) {
+      return String(localized: "Status: Failed - retry stopped")
+    }
+
+    let queued = groupStatuses.compactMap { status -> (position: Int, total: Int)? in
+      guard case .queued(let position, let total) = status else { return nil }
+      return (position, total)
+    }
+
+    if let first = queued.min(by: { $0.position < $1.position }),
+      let last = queued.max(by: { $0.position < $1.position })
+    {
+      if first.position == last.position {
+        return "Status: Queued (\(first.position) of \(first.total))"
+      }
+      return "Status: Queued (\(first.position)-\(last.position) of \(first.total))"
+    }
+
+    if groupStatuses.contains(.stopped) {
+      return String(localized: "Status: Stopped - earlier batch failed")
+    }
+
+    return nil
   }
 
   func isActive(batchId: Int64?) -> Bool {
@@ -39,9 +78,15 @@ final class RetryCoordinator: ObservableObject {
     return activeBatchId == batchId
   }
 
+  func isActive(batchIds: [Int64]) -> Bool {
+    guard let activeBatchId else { return false }
+    return batchIds.contains(activeBatchId)
+  }
+
   func startRetry(for dayString: String, onBatchCompleted: @escaping (Int64) -> Void) {
     guard !isRunning else { return }
     isRunning = true
+    AnalysisManager.shared.setManualRetryRunning(true)
 
     Task.detached {
       let batchIds = Self.failedBatchIds(for: dayString)
@@ -55,6 +100,7 @@ final class RetryCoordinator: ObservableObject {
     statuses = [:]
     activeBatchId = nil
     isRunning = false
+    AnalysisManager.shared.setManualRetryRunning(false)
     stopDotTimer()
   }
 
@@ -64,9 +110,12 @@ final class RetryCoordinator: ObservableObject {
     var ordered: [Int64] = []
 
     for card in cards {
+      // A batch already being retried automatically still shows its failed
+      // card; skip it so two runs don't race.
       guard
         TimelineActivityLoader.isRetryableFailedCard(card, storageManager: StorageManager.shared),
-        let batchId = card.batchId
+        let batchId = card.batchId,
+        !AnalysisManager.shared.isBatchInFlight(batchId)
       else { continue }
       guard !seen.contains(batchId) else { continue }
       seen.insert(batchId)
@@ -81,6 +130,7 @@ final class RetryCoordinator: ObservableObject {
     activeBatchId = nil
     guard !batchIds.isEmpty else {
       isRunning = false
+      AnalysisManager.shared.setManualRetryRunning(false)
       return
     }
 
@@ -111,7 +161,10 @@ final class RetryCoordinator: ObservableObject {
         self?.statuses[batchId] = .running(step: step)
       },
       completion: { [weak self] result in
-        guard let self else { return }
+        guard let self else {
+          AnalysisManager.shared.setManualRetryRunning(false)
+          return
+        }
 
         switch result {
         case .success:
@@ -137,6 +190,7 @@ final class RetryCoordinator: ObservableObject {
   private func finishRun() {
     activeBatchId = nil
     isRunning = false
+    AnalysisManager.shared.setManualRetryRunning(false)
     stopDotTimer()
   }
 
@@ -164,9 +218,9 @@ final class RetryCoordinator: ObservableObject {
   private func stepLabel(_ step: LLMProcessingStep) -> String {
     switch step {
     case .transcribing:
-      return "1/2 Transcribing"
+      return String(localized: "1/2 Transcribing")
     case .generatingCards:
-      return "2/2 Generating cards"
+      return String(localized: "2/2 Generating cards")
     }
   }
 }

@@ -83,13 +83,15 @@ private struct GoalSetupStatPair {
 }
 
 struct DayGoalFlowOverlay: View {
+  @Environment(\.dayflowTheme) private var theme
+
   let presentation: DayGoalFlowPresentation
   var onDismiss: () -> Void
 
   var body: some View {
     GeometryReader { proxy in
       ZStack {
-        Color(hex: "DB420B").opacity(0.10)
+        theme.sheetOverlay
           .ignoresSafeArea()
 
         DayGoalFlowView(
@@ -120,6 +122,9 @@ struct DayGoalFlowOverlay: View {
 }
 
 struct DayGoalFlowView: View {
+  @Environment(\.dayflowTheme) private var theme
+  @Environment(\.stylePreviewAfter) private var stylePreviewAfter
+
   let review: DayGoalReviewSnapshot
   let categories: [TimelineCategory]
   let setupReferenceStats: DayGoalSetupReferenceStats
@@ -157,14 +162,6 @@ struct DayGoalFlowView: View {
 
   private enum Design {
     static let canvasSize = CGSize(width: 1200, height: 680)
-    static let backgroundTop = Color(hex: "FFF3EC")
-    static let backgroundBottom = Color(hex: "FF8046").opacity(0.78)
-    static let orange = Color(hex: "FF8046")
-    static let mutedOrange = Color(hex: "FFEDE4")
-    static let mutedBorder = Color(hex: "B1A8A1")
-    static let text = Color(hex: "333333")
-    static let focus = Color(hex: "628CFF")
-    static let distraction = Color(hex: "FA8282")
   }
 
   var body: some View {
@@ -199,8 +196,8 @@ struct DayGoalFlowView: View {
   private var reviewScreen: some View {
     ZStack(alignment: .topLeading) {
       Text("Yesterday’s review")
-        .font(.custom("Instrument Serif", size: 36))
-        .foregroundColor(Design.text)
+        .font(.custom("InstrumentSerif-Regular", size: 36))
+        .foregroundColor(theme.textPrimary)
         .tracking(-1.08)
         .multilineTextAlignment(.center)
         .frame(width: 346, height: 44)
@@ -208,8 +205,9 @@ struct DayGoalFlowView: View {
 
       GoalReviewCard(
         kind: .focus,
-        title: "Focus target: \(formatDuration(review.plan.focusTargetDuration))",
-        subtitle: "Time spent: \(formatDuration(review.focusDuration))",
+        title: String(
+          localized: "Focus target: \(formatDuration(review.plan.focusTargetDuration))"),
+        subtitle: String(localized: "Time spent: \(formatDuration(review.focusDuration))"),
         targetDuration: review.plan.focusTargetDuration,
         actualDuration: review.focusDuration,
         categories: review.focusCategories
@@ -219,8 +217,10 @@ struct DayGoalFlowView: View {
 
       GoalReviewCard(
         kind: .distraction,
-        title: "Distraction limit: \(formatDuration(review.plan.distractionLimitDuration))",
-        subtitle: "Time spent distracted: \(formatDuration(review.distractedDuration))",
+        title: String(
+          localized: "Distraction limit: \(formatDuration(review.plan.distractionLimitDuration))"),
+        subtitle: String(
+          localized: "Time spent distracted: \(formatDuration(review.distractedDuration))"),
         targetDuration: review.plan.distractionLimitDuration,
         actualDuration: review.distractedDuration,
         categories: []
@@ -228,7 +228,7 @@ struct DayGoalFlowView: View {
       .frame(width: 388, height: 123)
       .position(x: 600, y: 491.5)
 
-      primaryButton("Set today’s goals") {
+      primaryButton(String(localized: "Set today’s goals")) {
         onSetupStarted()
         withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
           screen = .setup
@@ -244,8 +244,8 @@ struct DayGoalFlowView: View {
 
     return ZStack(alignment: .topLeading) {
       Text("Where do you want to spend your time today?")
-        .font(.custom("Instrument Serif", size: 24))
-        .foregroundColor(.black)
+        .font(.custom("InstrumentSerif-Regular", size: 24))
+        .foregroundColor(theme.textPrimary)
         .multilineTextAlignment(.center)
         .frame(width: 620, height: 30)
         .position(x: 602, y: 64)
@@ -261,11 +261,11 @@ struct DayGoalFlowView: View {
 
       GoalSetupPanel(
         kind: .focus,
-        title: "Focus goal",
+        title: String(localized: "Focus goal"),
         durationMinutes: $draft.focusTargetMinutes,
-        leadingStatTitle: "Yesterday’s focus",
+        leadingStatTitle: String(localized: "Yesterday’s focus"),
         leadingStatMinutes: focusStats.yesterdayMinutes,
-        trailingStatTitle: "Last week’s Focus average",
+        trailingStatTitle: String(localized: "Last week’s Focus average"),
         trailingStatMinutes: focusStats.lastWeekAverageMinutes,
         statScaleMaxMinutes: focusStats.scaleMaxMinutes,
         selectedCategories: resolvedSnapshots(for: .focus),
@@ -277,11 +277,11 @@ struct DayGoalFlowView: View {
 
       GoalSetupPanel(
         kind: .distraction,
-        title: "Distraction limit",
+        title: String(localized: "Distraction limit"),
         durationMinutes: $draft.distractionLimitMinutes,
-        leadingStatTitle: "Yesterday’s Distractions",
+        leadingStatTitle: String(localized: "Yesterday’s Distractions"),
         leadingStatMinutes: distractionStats.yesterdayMinutes,
-        trailingStatTitle: "Last week’s Distraction average",
+        trailingStatTitle: String(localized: "Last week’s Distraction average"),
         trailingStatMinutes: distractionStats.lastWeekAverageMinutes,
         statScaleMaxMinutes: distractionStats.scaleMaxMinutes,
         selectedCategories: resolvedSnapshots(for: .distraction),
@@ -292,9 +292,9 @@ struct DayGoalFlowView: View {
       .position(x: 804, y: 385.5)
 
       HStack(spacing: 10) {
-        secondaryButton("Skip today", action: onSkip)
+        secondaryButton(String(localized: "Skip today"), action: onSkip)
 
-        primaryButton("Confirm") {
+        primaryButton(String(localized: "Confirm")) {
           var plan = draft
           plan.isSkipped = false
           let now = Int(Date().timeIntervalSince1970)
@@ -473,11 +473,42 @@ struct DayGoalFlowView: View {
     Button(action: action) {
       Text(title)
         .font(.custom("Figtree", size: 13).weight(.medium))
-        .foregroundColor(.white)
+        .foregroundColor(theme.primaryButtonText)
         .lineLimit(1)
         .frame(width: 120, height: 36)
-        .background(Design.orange)
-        .clipShape(RoundedRectangle(cornerRadius: 6))
+        .background(
+          Group {
+            if stylePreviewAfter {
+              Capsule().fill(theme.primaryButtonFill)
+            } else {
+              RoundedRectangle(cornerRadius: 6).fill(theme.primaryButtonFill)
+            }
+          }
+        )
+        .overlay(
+          Group {
+            if stylePreviewAfter {
+              InnerGlow(
+                shape: Capsule(), color: theme.primaryButtonInnerGlow, radius: 3
+              )
+            } else {
+              InnerGlow(
+                shape: RoundedRectangle(cornerRadius: 6), color: theme.primaryButtonInnerGlow,
+                radius: 3
+              )
+            }
+          }
+        )
+        .overlay(
+          Group {
+            if stylePreviewAfter {
+              Capsule().strokeBorder(theme.primaryButtonBorder, lineWidth: 0.75)
+            } else {
+              RoundedRectangle(cornerRadius: 6).strokeBorder(
+                theme.primaryButtonBorder, lineWidth: 0.75)
+            }
+          }
+        )
     }
     .buttonStyle(DayflowPressScaleButtonStyle(pressedScale: 0.97))
     .hoverScaleEffect(scale: 1.02)
@@ -488,14 +519,28 @@ struct DayGoalFlowView: View {
     Button(action: action) {
       Text(title)
         .font(.custom("Figtree", size: 13).weight(.medium))
-        .foregroundColor(Design.mutedBorder)
+        .foregroundColor(theme.secondaryButtonText)
         .lineLimit(1)
         .frame(width: 120, height: 36)
-        .background(Design.mutedOrange)
-        .clipShape(RoundedRectangle(cornerRadius: 6))
+        .background(
+          Group {
+            if stylePreviewAfter {
+              Capsule().fill(theme.secondaryButtonFill)
+            } else {
+              RoundedRectangle(cornerRadius: 6).fill(theme.secondaryButtonFill)
+            }
+          }
+        )
         .overlay(
-          RoundedRectangle(cornerRadius: 6)
-            .stroke(Design.mutedBorder, lineWidth: 1)
+          Group {
+            if stylePreviewAfter {
+              Capsule().strokeBorder(
+                theme.secondaryButtonBorder, lineWidth: 0.75)
+            } else {
+              RoundedRectangle(cornerRadius: 6).strokeBorder(
+                theme.secondaryButtonBorder, lineWidth: 0.75)
+            }
+          }
         )
     }
     .buttonStyle(DayflowPressScaleButtonStyle(pressedScale: 0.97))
@@ -503,18 +548,9 @@ struct DayGoalFlowView: View {
     .pointingHandCursorOnHover(reassertOnPressEnd: true)
   }
 
+  /// Spelled-out hours and minutes in the current language, e.g. "2 hours, 30 minutes".
   private func formatDuration(_ duration: TimeInterval) -> String {
-    let totalMinutes = max(0, Int(duration / 60))
-    let hours = totalMinutes / 60
-    let minutes = totalMinutes % 60
-
-    if hours > 0 && minutes > 0 {
-      return "\(hours) hours \(minutes) minutes"
-    }
-    if hours > 0 {
-      return hours == 1 ? "1 hour" : "\(hours) hours"
-    }
-    return "\(minutes) minutes"
+    LocalizedDuration.string(duration)
   }
 
 }

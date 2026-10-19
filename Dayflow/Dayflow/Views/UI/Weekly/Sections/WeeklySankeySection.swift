@@ -42,11 +42,11 @@ struct WeeklySankeySection: View {
       WeeklySankeyCard(model: model, width: width)
     }
     .frame(width: width, alignment: .topLeading)
-    .background(Color.white.opacity(0.6))
+    .background(WeeklyPalette.cardFill)
     .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
     .overlay(
       RoundedRectangle(cornerRadius: 4, style: .continuous)
-        .stroke(Color(hex: "EBE6E3"), lineWidth: 1)
+        .stroke(WeeklyPalette.cardBorder, lineWidth: 1)
     )
   }
 
@@ -54,19 +54,19 @@ struct WeeklySankeySection: View {
     HStack(spacing: 8) {
       Text(model.seedLabel)
         .font(.custom("Figtree-Medium", size: 11))
-        .foregroundStyle(Color(hex: "B16845"))
+        .foregroundStyle(WeeklyPalette.title)
 
       Spacer(minLength: 12)
 
-      controlButton("Timeline data", dataset: .timeline) {
+      controlButton(String(localized: "Timeline data"), dataset: .timeline) {
         dataset = .timeline
       }
 
-      controlButton("Figma baseline", dataset: .figma) {
+      controlButton(String(localized: "Figma baseline"), dataset: .figma) {
         dataset = .figma
       }
 
-      controlButton("Random stress", dataset: .random) {
+      controlButton(String(localized: "Random stress"), dataset: .random) {
         dataset = .random
         randomSeed = nextRandomSeed()
       }
@@ -123,5 +123,5 @@ private enum WeeklySankeyDataset {
 #Preview("Weekly Sankey", traits: .fixedLayout(width: 958, height: 545)) {
   WeeklySankeySection()
     .padding(24)
-    .background(Color(hex: "FBF6EF"))
+    .background(WeeklyPalette.canvas)
 }

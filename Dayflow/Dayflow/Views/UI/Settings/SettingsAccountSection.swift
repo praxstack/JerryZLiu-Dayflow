@@ -32,9 +32,13 @@ struct SettingsAccountSection: View {
         isAuthSheetPresented = false
       }
       .frame(width: 430)
+      // Sheets get their own window, so force light like the What's New sheet does —
+      // otherwise dark mode renders white text on the sheet's white background.
+      .environment(\.colorScheme, .light)
+      .preferredColorScheme(.light)
     }
     .task {
-      authManager.loadStoredSessionIfNeeded()
+      await authManager.refreshAccount()
     }
     .onChange(of: authManager.pendingReferralCode) { _, pendingCode in
       guard let pendingCode, applyReferralCode.isEmpty else { return }
@@ -44,12 +48,13 @@ struct SettingsAccountSection: View {
 
   private var accountSection: some View {
     SettingsSection(
-      title: "Account",
-      subtitle: "Sign in once to keep Dayflow Pro and cloud features attached to this Mac."
+      title: String(localized: "Account"),
+      subtitle: String(
+        localized: "Sign in once to keep Dayflow Pro and cloud features attached to this Mac.")
     ) {
       VStack(alignment: .leading, spacing: 0) {
         SettingsRow(
-          label: "Dayflow account",
+          label: String(localized: "Dayflow account"),
           subtitle: authManager.isSignedIn
             ? authManager.displayIdentity
             : nil,
@@ -58,19 +63,20 @@ struct SettingsAccountSection: View {
           HStack(spacing: 8) {
             SettingsStatusDot(
               state: authManager.isSignedIn ? .good : .warn,
-              label: authManager.isSignedIn ? "Signed in" : "Signed out"
+              label: authManager.isSignedIn
+                ? String(localized: "Signed in") : String(localized: "Signed out")
             )
 
             if authManager.isSignedIn {
               SettingsSecondaryButton(
-                title: "Sign out",
+                title: String(localized: "Sign out"),
                 systemImage: "rectangle.portrait.and.arrow.right",
                 isDisabled: authManager.isBusy,
                 action: { Task { await authManager.signOut() } }
               )
             } else {
               SettingsPrimaryButton(
-                title: "Sign in",
+                title: String(localized: "Sign in"),
                 systemImage: "person.crop.circle",
                 isLoading: authManager.isBusy && authManager.hasLoadedStoredSession == false,
                 action: { isAuthSheetPresented = true }
@@ -84,8 +90,8 @@ struct SettingsAccountSection: View {
 
   private var currentPlanSection: some View {
     SettingsSection(
-      title: "Account",
-      subtitle: "Manage your Dayflow account and subscription."
+      title: String(localized: "Account"),
+      subtitle: String(localized: "Manage your Dayflow account and subscription.")
     ) {
       ActiveProCard(
         entitlement: authManager.entitlements,
@@ -99,16 +105,16 @@ struct SettingsAccountSection: View {
 
   private var upgradeSection: some View {
     SettingsSection(
-      title: "Upgrade to Dayflow Pro",
-      subtitle: "Pick a plan, then finish securely in Stripe Checkout."
+      title: String(localized: "Upgrade to Dayflow Pro"),
+      subtitle: String(localized: "Pick a plan, then finish securely in Stripe Checkout.")
     ) {
       VStack(alignment: .leading, spacing: 16) {
         HStack(alignment: .top, spacing: 12) {
           BillingPlanCard(
-            title: "Monthly",
+            title: String(localized: "Monthly"),
             price: "$20",
-            cadence: "/mo",
-            note: "Flexible monthly billing.",
+            cadence: String(localized: "/mo"),
+            note: String(localized: "Flexible monthly billing."),
             badge: nil,
             isSelected: selectedBillingInterval == .monthly
           ) {
@@ -118,11 +124,11 @@ struct SettingsAccountSection: View {
           }
 
           BillingPlanCard(
-            title: "Yearly",
+            title: String(localized: "Yearly"),
             price: "$15",
-            cadence: "/mo",
-            note: "Billed yearly.",
-            badge: "2 months free",
+            cadence: String(localized: "/mo"),
+            note: String(localized: "Billed yearly."),
+            badge: String(localized: "2 months free"),
             isSelected: selectedBillingInterval == .yearly
           ) {
             withAnimation(.easeOut(duration: 0.16)) {
@@ -136,7 +142,8 @@ struct SettingsAccountSection: View {
 
         HStack(alignment: .center, spacing: 12) {
           SettingsPrimaryButton(
-            title: authManager.isSignedIn ? "Start 14-day trial" : "Sign in to upgrade",
+            title: authManager.isSignedIn
+              ? String(localized: "Continue to checkout") : String(localized: "Sign in to upgrade"),
             systemImage: authManager.isSignedIn ? "creditcard" : "person.crop.circle",
             isLoading: authManager.isBusy,
             action: upgradeAction
@@ -148,7 +155,7 @@ struct SettingsAccountSection: View {
               .foregroundColor(SettingsStyle.secondary)
               .fixedSize(horizontal: false, vertical: true)
 
-            SettingsLinkButton(title: "Privacy policy", systemImage: "lock") {
+            SettingsLinkButton(title: String(localized: "Privacy policy"), systemImage: "lock") {
               openPrivacyPolicy()
             }
           }
@@ -265,6 +272,7 @@ private func formattedEntitlementDate(_ value: String?) -> String? {
 }
 
 private struct ActiveProCard: View {
+  @Environment(\.dayflowTheme) private var theme
   let entitlement: DayflowEntitlement
   let email: String
   let isBusy: Bool
@@ -275,33 +283,56 @@ private struct ActiveProCard: View {
     entitlement.source == "manual"
   }
 
+  // Dayflow Plus is the Flow-only plan; it does not include the Pro features.
+  private var isPlus: Bool {
+    entitlement.plan == "plus"
+  }
+
+  private var isTrial: Bool {
+    entitlement.source == "trial"
+  }
+
   private var title: String {
-    isGifted ? "Gifted Pro" : "Dayflow Pro"
+    if isPlus { return String(localized: "Dayflow Plus") }
+    return isGifted ? String(localized: "Gifted Pro") : String(localized: "Dayflow Pro")
   }
 
   private var badge: String {
-    isGifted ? "Gifted" : "Active"
+    if isTrial { return String(localized: "Free trial") }
+    return isGifted ? String(localized: "Gifted") : String(localized: "Active")
   }
 
   private var description: String {
-    if isGifted {
-      return
-        "You have complimentary Dayflow Pro access. There is no billing to manage for this account."
+    if isPlus {
+      return isTrial
+        ? String(localized: "Your free trial of Flow is running on this Mac.")
+        : String(
+          localized: "Flow is unlocked on this Mac and attached to your Dayflow account.")
     }
 
-    return "Your Pro access is active on this Mac and attached to your Dayflow account."
+    if isGifted {
+      return
+        String(
+          localized:
+            "You have complimentary Dayflow Pro access. There is no billing to manage for this account."
+        )
+    }
+
+    return String(
+      localized: "Your Pro access is active on this Mac and attached to your Dayflow account.")
   }
 
   private var dateLabel: String {
     if formattedEntitlementDate(entitlement.currentPeriodEnd) == nil {
-      return "Status"
+      return String(localized: "Status")
     }
 
-    return isGifted ? "Access through" : "Renews"
+    if isTrial { return String(localized: "Trial ends") }
+    return isGifted ? String(localized: "Access through") : String(localized: "Renews")
   }
 
   private var dateValue: String {
-    formattedEntitlementDate(entitlement.currentPeriodEnd) ?? "Active"
+    formattedEntitlementDate(entitlement.currentPeriodEnd) ?? String(localized: "Active")
   }
 
   var body: some View {
@@ -327,12 +358,12 @@ private struct ActiveProCard: View {
 
         Spacer(minLength: 16)
 
-        SettingsStatusDot(state: .good, label: "Active")
+        SettingsStatusDot(state: .good, label: String(localized: "Active"))
           .padding(.top, 4)
       }
 
       HStack(alignment: .top, spacing: 12) {
-        ActiveProInfoTile(label: "Signed in as", value: email)
+        ActiveProInfoTile(label: String(localized: "Signed in as"), value: email)
         ActiveProInfoTile(label: dateLabel, value: dateValue)
       }
 
@@ -341,21 +372,21 @@ private struct ActiveProCard: View {
         .frame(height: 1)
 
       HStack(alignment: .center, spacing: 16) {
-        ProFeatureList()
+        ProFeatureList(features: isPlus ? ProFeatureList.plus : ProFeatureList.pro)
 
         Spacer(minLength: 16)
 
         HStack(spacing: 8) {
           SettingsSecondaryButton(
-            title: "Sign out",
+            title: String(localized: "Sign out"),
             systemImage: "rectangle.portrait.and.arrow.right",
             isDisabled: isBusy,
             action: signOutAction
           )
 
-          if !isGifted {
+          if !isGifted && !isTrial {
             SettingsPrimaryButton(
-              title: "Manage billing",
+              title: String(localized: "Manage billing"),
               systemImage: "creditcard",
               isLoading: isBusy,
               action: manageBillingAction
@@ -367,7 +398,7 @@ private struct ActiveProCard: View {
     .padding(18)
     .background(
       RoundedRectangle(cornerRadius: 10, style: .continuous)
-        .fill(Color.white)
+        .fill(theme.summaryCardFill)
     )
     .overlay(
       RoundedRectangle(cornerRadius: 10, style: .continuous)
@@ -396,6 +427,7 @@ private struct ActiveProCard: View {
 }
 
 private struct ActiveProInfoTile: View {
+  @Environment(\.dayflowTheme) private var theme
   let label: String
   let value: String
 
@@ -418,7 +450,7 @@ private struct ActiveProInfoTile: View {
     .padding(12)
     .background(
       RoundedRectangle(cornerRadius: 8, style: .continuous)
-        .fill(Color.white.opacity(0.45))
+        .fill(theme.summaryCardFill)
     )
     .overlay(
       RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -428,6 +460,7 @@ private struct ActiveProInfoTile: View {
 }
 
 private struct ReferralProgramCard: View {
+  @Environment(\.dayflowTheme) private var theme
   let summary: DayflowReferralSummary?
   @Binding var inviteEmail: String
   @Binding var applyReferralCode: String
@@ -460,7 +493,11 @@ private struct ReferralProgramCard: View {
     .padding(20)
     .background(
       RoundedRectangle(cornerRadius: 8, style: .continuous)
-        .fill(Color.white)
+        .fill(theme.summaryCardFill)
+    )
+    .overlay(
+      RoundedRectangle(cornerRadius: 8, style: .continuous)
+        .stroke(theme.summaryCardBorder, lineWidth: 1)
     )
     .task {
       if isSignedIn && summary == nil {
@@ -474,11 +511,11 @@ private struct ReferralProgramCard: View {
       Text("Refer and earn rewards")
         .font(.custom("Figtree", size: 16))
         .fontWeight(.bold)
-        .foregroundColor(Color(hex: "333333"))
+        .foregroundColor(theme.textPrimary)
 
       Text("Give a month of Dayflow Pro and earn $20 in credits for each person you refer!")
         .font(.custom("Figtree", size: 12))
-        .foregroundColor(Color(hex: "333333"))
+        .foregroundColor(theme.textPrimary)
     }
     .frame(maxWidth: .infinity, alignment: .leading)
   }
@@ -495,12 +532,12 @@ private struct ReferralProgramCard: View {
             Text(tabTitle(for: tab))
               .font(.custom("Figtree", size: 12))
               .fontWeight(selectedTab == tab ? .bold : .regular)
-              .foregroundColor(Color(hex: "333333"))
+              .foregroundColor(theme.textPrimary)
               .padding(.bottom, 8)
               .overlay(alignment: .bottom) {
                 if selectedTab == tab {
                   Rectangle()
-                    .fill(Color(hex: "333333"))
+                    .fill(theme.textPrimary)
                     .frame(height: 2)
                 }
               }
@@ -514,7 +551,7 @@ private struct ReferralProgramCard: View {
       .padding(.leading, 8)
 
       Rectangle()
-        .fill(Color(hex: "DFDDDB"))
+        .fill(SettingsStyle.divider)
         .frame(height: 1)
     }
   }
@@ -534,7 +571,7 @@ private struct ReferralProgramCard: View {
     .frame(maxWidth: .infinity)
     .background(
       RoundedRectangle(cornerRadius: 8, style: .continuous)
-        .fill(Color(hex: "F5F4F1"))
+        .fill(SettingsStyle.subtleFill)
     )
   }
 
@@ -560,20 +597,20 @@ private struct ReferralProgramCard: View {
         Text("Sign in to get your invite link")
           .font(.custom("Figtree", size: 12))
           .fontWeight(.bold)
-          .foregroundColor(Color(hex: "333333"))
+          .foregroundColor(theme.textPrimary)
 
         Text(
           "Referral credits are tied to your Dayflow account so we can credit you when friends join."
         )
         .font(.custom("Figtree", size: 11))
-        .foregroundColor(Color(hex: "72706D"))
+        .foregroundColor(theme.textSecondary)
         .fixedSize(horizontal: false, vertical: true)
       }
 
       Spacer(minLength: 12)
 
       ReferralMiniButton(
-        title: "Sign in",
+        title: String(localized: "Sign in"),
         style: .send,
         isDisabled: isBusy,
         action: signInAction
@@ -585,17 +622,17 @@ private struct ReferralProgramCard: View {
     VStack(alignment: .leading, spacing: 5) {
       Text("Your invite link")
         .font(.custom("Figtree", size: 12))
-        .foregroundColor(Color(hex: "333333"))
+        .foregroundColor(theme.textPrimary)
 
       HStack(spacing: 8) {
         ReferralFieldText(
           icon: "link",
-          text: summary?.inviteURL ?? "Loading invite link...",
-          color: Color(hex: "333333")
+          text: summary?.inviteURL ?? String(localized: "Loading invite link..."),
+          color: theme.textPrimary
         )
 
         ReferralMiniButton(
-          title: copiedReferralLink ? "Copied" : "Copy",
+          title: copiedReferralLink ? String(localized: "Copied") : String(localized: "Copy"),
           style: .copy,
           isDisabled: summary == nil,
           action: copyAction
@@ -608,13 +645,13 @@ private struct ReferralProgramCard: View {
     VStack(alignment: .leading, spacing: 5) {
       Text("Send invites")
         .font(.custom("Figtree", size: 12))
-        .foregroundColor(Color(hex: "333333"))
+        .foregroundColor(theme.textPrimary)
 
       HStack(spacing: 8) {
         ReferralEmailField(email: $inviteEmail, isDisabled: isBusy)
 
         ReferralMiniButton(
-          title: "Send",
+          title: String(localized: "Send"),
           style: .send,
           isDisabled: isBusy || inviteEmail.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
           action: sendInviteAction
@@ -628,7 +665,7 @@ private struct ReferralProgramCard: View {
       Text("How it works")
         .font(.custom("Figtree", size: 12))
         .fontWeight(.bold)
-        .foregroundColor(Color(hex: "333333"))
+        .foregroundColor(theme.textPrimary)
 
       VStack(alignment: .leading, spacing: 4) {
         ReferralStepRow(
@@ -637,12 +674,12 @@ private struct ReferralProgramCard: View {
         )
         ReferralStepRow(
           icon: .menuBarMark,
-          content: Text("They sign up and get a ") + Text("free month of Dayflow Pro!").bold()
+          content: Text("They sign up and get a **free month of Dayflow Pro!**")
         )
         ReferralStepRow(
           icon: .system("sparkles"),
-          content: Text("You earn ") + Text("1 month of Dayflow Pro (stackable!)").bold()
-            + Text(", when they use Dayflow for a week.")
+          content: Text(
+            "You earn **1 month of Dayflow Pro (stackable!)**, when they use Dayflow for a week.")
         )
       }
     }
@@ -659,13 +696,13 @@ private struct ReferralProgramCard: View {
                 Text(invite.email)
                   .font(.custom("Figtree", size: 12))
                   .fontWeight(.semibold)
-                  .foregroundColor(Color(hex: "333333"))
+                  .foregroundColor(theme.textPrimary)
                   .lineLimit(1)
                   .truncationMode(.middle)
 
                 Text(inviteStatusText(invite))
                   .font(.custom("Figtree", size: 11))
-                  .foregroundColor(Color(hex: "72706D"))
+                  .foregroundColor(theme.textSecondary)
               }
 
               Spacer()
@@ -679,13 +716,13 @@ private struct ReferralProgramCard: View {
 
             if invite.id != invites.prefix(8).last?.id {
               Rectangle()
-                .fill(Color(hex: "DFDDDB"))
+                .fill(SettingsStyle.divider)
                 .frame(height: 1)
             }
           }
         }
       } else {
-        EmptyReferralState(text: "No invites yet.")
+        EmptyReferralState(text: String(localized: "No invites yet."))
       }
     }
     .frame(maxWidth: .infinity, alignment: .leading)
@@ -696,13 +733,13 @@ private struct ReferralProgramCard: View {
       Text("Redeem a referral code")
         .font(.custom("Figtree", size: 12))
         .fontWeight(.bold)
-        .foregroundColor(Color(hex: "333333"))
+        .foregroundColor(theme.textPrimary)
 
       HStack(spacing: 8) {
         ReferralCodeField(code: $applyReferralCode, isDisabled: isBusy)
 
         ReferralMiniButton(
-          title: "Apply",
+          title: String(localized: "Apply"),
           style: .send,
           isDisabled: isBusy || applyReferralCode.count != 6,
           action: applyCodeAction
@@ -715,26 +752,27 @@ private struct ReferralProgramCard: View {
   private func tabTitle(for tab: ReferralTab) -> String {
     switch tab {
     case .refer:
-      return "Refer"
+      return String(localized: "Refer")
     case .past:
-      return "Past referrals (\(summary?.invites.count ?? 0))"
+      return String(localized: "Past referrals (\(summary?.invites.count ?? 0))")
     case .apply:
-      return "Apply referral"
+      return String(localized: "Apply referral")
     }
   }
 
   private func inviteStatusText(_ invite: DayflowReferralInvite) -> String {
     if invite.unlockedAt != nil {
-      return "Reward earned"
+      return String(localized: "Reward earned")
     }
     if invite.claimedAt != nil {
-      return "\(String(format: "%.1f", invite.usageHours)) / 40 hours recorded"
+      return String(localized: "\(String(format: "%.1f", invite.usageHours)) / 40 hours recorded")
     }
-    return "Invite sent"
+    return String(localized: "Invite sent")
   }
 }
 
 private struct BillingPlanCard: View {
+  @Environment(\.dayflowTheme) private var theme
   let title: String
   let price: String
   let cadence: String
@@ -778,7 +816,7 @@ private struct BillingPlanCard: View {
       .padding(14)
       .background(
         RoundedRectangle(cornerRadius: 8, style: .continuous)
-          .fill(isSelected ? SettingsStyle.ink.opacity(0.06) : Color.white.opacity(0.55))
+          .fill(isSelected ? SettingsStyle.ink.opacity(0.06) : SettingsStyle.subtleFill)
       )
       .overlay(
         RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -791,12 +829,19 @@ private struct BillingPlanCard: View {
 }
 
 private struct ProFeatureList: View {
-  private let features = [
-    "Zero setup cloud AI for timeline generation",
-    "Daily and weekly reports without provider setup",
-    "Priority support",
-    "Processed securely and never used to train AI models",
+  static let pro = [
+    String(localized: "Zero setup cloud AI for timeline generation"),
+    String(localized: "Daily and weekly reports without provider setup"),
+    String(localized: "Priority support"),
+    String(localized: "Processed securely and never used to train AI models"),
   ]
+  static let plus = [
+    String(localized: "Flow focus sessions with your island companion"),
+    String(localized: "Distraction alerts while a session is running"),
+    String(localized: "Session summaries and island progress"),
+  ]
+
+  var features: [String] = ProFeatureList.pro
 
   var body: some View {
     VStack(alignment: .leading, spacing: 8) {

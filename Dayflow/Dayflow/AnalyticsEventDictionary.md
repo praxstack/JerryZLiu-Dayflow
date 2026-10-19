@@ -6,7 +6,7 @@ This document lists manual events, properties, and code locations. All events re
 - Event names: snake_case
 - Screens: `screen_viewed` with `screen`
 - Common super properties (registered on boot): `app_version`, `build_number`, `os_version`, `device_model`, `locale`, `time_zone`
-- Person properties (identify): `analytics_opt_in`, `onboarding_status`, `current_llm_provider`, `recording_enabled`, `install_ts` (set once)
+- Person properties (identify): `analytics_opt_in`, `onboarding_status`, `current_llm_provider` (provider family), `current_llm_provider_id` (`dayflow|gemini|chatgpt|claude|openai_compatible|local`), `recording_enabled`, `install_ts` (set once), `getting_started_variant` (`control|guide|none`, set when onboarding finishes from the `getting-started-guide` feature flag; `none` means no variant was available and the guide was shown)
 
 ## Lifecycle
 - app_opened
@@ -16,7 +16,9 @@ This document lists manual events, properties, and code locations. All events re
   - props: `from_version: string`, `to_version: string`
   - file: App/AppDelegate.swift
 - app_heartbeat
+  - appearance props: `appearance: system|light|dark` (saved preference, defaults to system), `effective_appearance: light|dark` (resolved at each heartbeat, including forced light during onboarding). Sent on startup and hourly; use each person's latest heartbeat for a user split rather than counting events.
   - props: `session_hours: number`, `cpu_current_pct_bucket?: 0-5%|5-20%|20-50%|50-100%|100-150%|150-200%|>200%`, `cpu_avg_pct_bucket?: 0-5%|5-20%|20-50%|50-100%|100-150%|150-200%|>200%`, `cpu_peak_pct_bucket?: 0-5%|5-20%|20-50%|50-100%|100-150%|150-200%|>200%`, `cpu_sample_count?: int`, `cpu_sampler_interval_s?: int`, `current_tab?: timeline|daily|weekly|dashboard|journal|bug_report|settings`, `timeline_mode?: day|week`
+  - ScreenCaptureKit props (counts since the previous heartbeat): `sck_shareable_content_calls: int`, `sck_screenshot_calls: int`, `sck_failures_while_granted: int`
   - file: App/AppDelegate.swift
 - app_cpu_spike
   - props: `cpu_current_pct_bucket: 0-5%|5-20%|20-50%|50-100%|100-150%|150-200%|>200%`, `cpu_hour_peak_pct_bucket: 0-5%|5-20%|20-50%|50-100%|100-150%|150-200%|>200%`, `cpu_threshold_pct: number`, `cpu_sampler_interval_s: int`
@@ -31,16 +33,18 @@ This document lists manual events, properties, and code locations. All events re
 - onboarding_started
   - file: Views/Onboarding/OnboardingFlow.swift (intro video appear)
 - onboarding_step_completed
-  - props: `step: intro_video|role_selection|download_reason|referral|preferences|llm_selection|llm_setup|categories|category_colors|screen_recording|completion`
+  - props: `step: intro_video|role_selection|referral|llm_selection|llm_setup|screen_recording|personal_goal|completion` (download_reason, preferences, categories and category_colors were removed in onboarding schema v6)
   - file: Views/Onboarding/OnboardingFlow.swift
-- onboarding_download_reason
+- onboarding_download_reason (retired in onboarding schema v6; historical data only)
   - props: `reasons: string[] (automatic_log|proof_of_work|cut_distractions|productive_focused|automated_manual_tracking|open_source_private|other)`, `surface: onboarding_download_reason`, `other_detail?: string`
   - file: Views/Onboarding/OnboardingFlow.swift
 - onboarding_referral
   - props: `source: hacker_news|x|friend|youtube|newsletter_blog|chatgpt_claude_ai|other`, `surface: onboarding_referral`, `detail?: string`
+- onboarding_personal_goal
+  - props: `goal: string` (free text, max 2,000 chars, empty when skipped), `character_count: int`, `skipped: bool`, `surface: onboarding_personal_goal`
   - file: Views/Onboarding/OnboardingFlow.swift
 - llm_provider_selected
-  - props: `provider: dayflow|chatgpt_claude|gemini|ollama`, `local_engine?: ollama|lmstudio|custom`
+  - props: `provider: dayflow|gemini|chat_cli|openai_compatible|ollama`, `provider_id: dayflow|gemini|chatgpt|claude|openai_compatible|local`, `local_engine?: ollama|lmstudio|custom`
   - file: Views/Onboarding/OnboardingFlow.swift
 - dayflow_pro_selected
   - props: `surface: onboarding_dayflow_pro`, `flow_id: string`, `flow_variant: string`, `has_paid_ai: bool`, `selection_stage: started_sign_in|continued`
@@ -57,19 +61,60 @@ This document lists manual events, properties, and code locations. All events re
   - props: `provider: gemini`, `error_code?: enum|string`
   - files: Views/Onboarding/TestConnectionView.swift
 - chat_cli_test_started / chat_cli_test_succeeded / chat_cli_test_failed
-  - props: `provider: chatgpt_claude`, `tool: codex|claude`, `setup_step: test`, `duration_ms?: int`, `exit_code?: int`, `failure_reason?: auth_error|nonzero_exit_no_stderr|nonzero_exit_with_stderr|empty_response|unexpected_output|cli_not_found|execution_error`, `error_code?: int`, `error_domain?: string`
-  - file: Views/Onboarding/LLMProviderSetupView.swift
+  - props: `provider: chat_cli`, `provider_id: chatgpt|claude`, `tool: codex|claude`, `setup_step: test`, `duration_ms?: int`, `exit_code?: int`, `failure_reason?: auth_error|nonzero_exit_no_stderr|nonzero_exit_with_stderr|empty_response|unexpected_output|cli_not_found|execution_error`, `error_code?: int`, `error_domain?: string`
+  - file: Views/Onboarding/ChatCLITestView.swift
+- chat_cli_detection_checked / chat_cli_tool_selected
+  - props: `provider_id: chatgpt|claude`, `source: initial|manual_recheck|detection_step`, `setup_step: detect`, `selected_tool: codex|claude|none`, CLI availability/status fields
+  - file: Views/Onboarding/ProviderSetupState.swift
 - onboarding_completed
   - file: Views/Onboarding/OnboardingFlow.swift
 - onboarding_abandoned
   - props: `last_step: string`
   - file: App/AppDelegate.swift (willTerminate)
 - terminal_command_copied
-  - props: `title: string`
-  - file: Views/Onboarding/TerminalCommandView.swift
+  - props: `title?: string`, `source?: settings`
+  - files: Views/Onboarding/TerminalCommandView.swift, Views/UI/Settings/SettingsAgentAccessTabView.swift
+
+## Agent Access
+- agent_client_connected
+  - props: `client: codex|claudeCode|claudeDesktop`
+  - file: Views/UI/Settings/SettingsAgentAccessTabView.swift
+- agent_client_deeplink
+  - props: `client: cursor|vsCode`
+  - file: Views/UI/Settings/SettingsAgentAccessTabView.swift
+- agent_edits_toggled
+  - props: `enabled: bool`
+  - file: Views/UI/Settings/SettingsAgentAccessTabView.swift
+- agent_command_executed
+  - props: `schema_version: int`, `interface: cli|mcp`, allowlisted `operation: string`, `outcome: success|failure|cancelled`, `failure_category?: invalid_input|not_found|edits_disabled|unavailable|execution_error|tool_error`, `duration_bucket: under_100ms|100_to_499ms|500_to_1999ms|2_to_9s|10s_plus`, `cli_version: string`
+  - privacy: locally queued and uploaded only through the opted-in app; never includes arguments, dates, search text, record IDs, paths, command lines, error text, or returned content
+  - files: tools/dayflow-cli/Sources/dayflow/AgentUsageTelemetry.swift, Core/AgentAccess/AgentUsageTelemetryQueue.swift
+
+## AgentPlayback
+- Launch and failure events include `attempt_id`, `requested_version`, `attempt_elapsed_seconds`, and `fallback_from_attempt_id` when recovering from another attempt.
+- Failure context includes `process_running`, `app_active`, `page_url`, `webview_loading`, and `system_uptime_seconds`. Native errors also include `error_domain`, `error_code`, `error_details`, and `error_user_info`. Process output includes Node version/executable, CLI path, and child exit code/signal. WebKit process termination callbacks do not provide a crash reason.
+- agentplayback_opened
+  - props: `already_loaded: bool`
+  - once per tab visit, including visits that fail to load; not emitted on every foreground transition
+- agentplayback_launch_started
+  - props: `mode: latest|cached_fallback`
+- agentplayback_launch_completed
+  - props: `mode: latest|cached_fallback`, `outcome: success|failure`, `duration_seconds: number`, `agentplayback_version?: string`, `failure_category?: preparation|process_launch|process_exit|missing_runtime|timeout|navigation|web_content_terminated`, `will_try_fallback?: bool`, failure diagnostics: `startup_stage`, `output_character_count`, `login_shell`, `termination_status?`, `termination_reason?`
+  - one result per launch attempt; success means WebKit finished loading the dashboard, not that every historical scan finished; a recovered failure and fallback success remain separate attempts
+- agentplayback_runtime_failed
+  - props: `mode: latest|cached_fallback`, `agentplayback_version?: string`, `failure_category: preparation|process_launch|process_exit|missing_runtime|timeout|navigation|web_content_terminated`, `will_try_fallback: bool`, `startup_stage`, `output_character_count`, `login_shell`, `termination_status?`, `termination_reason?`
+  - failures after the initial page load, separate from startup failures
+- agentplayback_retry_clicked
+  - explicit click on Try again
+- agentplayback_session_ended
+  - props: `duration_seconds: number`, `reason: tab_closed|background|unavailable|app_exit`
+  - one foreground viewing interval with the Agents tab selected and dashboard loaded; excludes downloads, hidden-tab time, and time in other apps; sum durations for total viewing time, not session counts for unique visits; crashes may lose the final interval
+  - privacy: all events use AnalyticsService and its analytics opt-in; opting out discards the current viewing interval. Launch and runtime failure events additionally include unsanitized `error_message` and `process_output` (the captured output buffer, capped at 16,000 characters), which may contain paths, URLs, and other process-emitted content. Successful launches and viewing events do not include these fields.
+  - files: Views/UI/Agents/AgentPlaybackView.swift, Views/UI/Agents/AgentPlaybackUsage.swift
 
 ## Settings & Privacy
 - settings_opened
+- getting_started_replayed (Settings > Other > "Show again"; the tour events that follow carry `replay: true`)
   - file: Views/UI/SettingsView.swift
 - analytics_opt_in_changed
   - props: `enabled: bool`
@@ -78,8 +123,14 @@ This document lists manual events, properties, and code locations. All events re
   - props: `from: string`, `to: string`
   - file: Views/UI/SettingsView.swift
 - provider_setup_completed
-  - props: `provider: gemini|ollama|dayflow`
-  - file: Views/UI/SettingsView.swift
+  - props: `provider: dayflow|gemini|chat_cli|openai_compatible|ollama`, `provider_id: dayflow|gemini|chatgpt|claude|openai_compatible|local`, provider-specific non-secret configuration metadata
+  - file: Views/UI/Settings/ProvidersSettingsViewModel.swift
+- provider_primary_updated / provider_secondary_updated / provider_backup_updated
+  - props: exact provider IDs in `provider_id` and role-specific fields (`provider_id: none` when clearing backup); `swapped_with_secondary?: bool`, `mode?: set|swap_with_primary`
+  - file: Views/UI/Settings/ProvidersSettingsViewModel.swift
+- llm_provider_routing_save_failed
+  - props: `provider_id: dayflow|gemini|chatgpt|claude|openai_compatible|local`, `surface: onboarding`
+  - file: Views/Onboarding/OnboardingFlow.swift
 
 ## Navigation & Timeline
 - tab_selected
@@ -100,6 +151,22 @@ This document lists manual events, properties, and code locations. All events re
 - timeline_copied
   - props: `timeline_mode: day|week`, `timeline_day?: yyyy-MM-dd`, `week_start?: yyyy-MM-dd`, `week_end?: yyyy-MM-dd`, `activity_count: int`
   - file: Views/UI/MainView.swift
+
+## Flow
+- screen_viewed (`screen: flow_waitlist`)
+  - file: Views/UI/Flow/FlowWaitlistView.swift
+- flow_waitlist_joined
+  - props: `outcome: success|failure`, `signed_in: bool`
+  - file: Views/UI/Flow/FlowWaitlistView.swift
+- flow_waitlist_message_sent
+  - props: `has_debug_log: false`, `new_ticket: bool`
+  - file: Views/UI/SupportChatWebView.swift
+- flow_waitlist_chat_unavailable
+  - props: `reason: string`
+  - file: Views/UI/SupportChatWebView.swift
+- flow_access_code_redeemed
+  - props: `outcome: success|failure`
+  - file: Views/UI/Flow/FlowWaitlistView.swift
 
 ## Dashboard Chat
 - chat_question_asked
@@ -136,10 +203,10 @@ This document lists manual events, properties, and code locations. All events re
   - props: `enabled: bool`, `reason: auto|unknown|onboarding|deeplink|menu_bar|main_app|user_menu_bar|user_main_app|timer_expired|wake_from_sleep`
   - file: App/AppDelegate.swift (observation) and AppDelegate auto-start
 - recording_paused
-  - props: `source: menu_bar|main_app|deeplink`, `pause_type: 15_mins|30_mins|1_hour|indefinite`
+  - props: `source: menu_bar|main_app|deeplink`, `pause_type: <n>_mins|1_hour|indefinite` (60 minutes is still sent as `1_hour`)
   - file: App/PauseManager.swift
 - recording_resumed
-  - props: `source: user_menu_bar|user_main_app|timer_expired|wake_from_sleep`, `was_timed: bool`, `original_pause_type: 15_mins|30_mins|1_hour|indefinite|unknown`
+  - props: `source: user_menu_bar|user_main_app|timer_expired|wake_from_sleep`, `was_timed: bool`, `original_pause_type: <n>_mins|1_hour|indefinite|unknown`
   - file: App/PauseManager.swift
 - timeline_paused_card_clicked
   - props: `action: resume_recording`
@@ -158,16 +225,73 @@ This document lists manual events, properties, and code locations. All events re
 - recording_auto_recovery
   - props: `outcome: restarted|gave_up`
   - file: Core/Recording/ScreenRecorder.swift
+- recording_startup_failed
+  - props: `attempt: int`, `error_domain: string`, `error_code: int`. Sent on the first failure of a streak; the recorder keeps retrying (5s, 30s, 1m, 2m, 5m, then every 10m).
+  - file: Core/Recording/ScreenRecorder.swift
+- recording_capture_backoff
+  - props: `reason: capture_error|no_display`, `failure_count: int`, `delay_s: int`, `error_domain?: string`, `error_code?: int`. Sent for each of the first four consecutive failures (delays 1m, 2m, 5m, 10m); later failures keep the 10m delay silently.
+  - file: Core/Recording/ScreenRecorder.swift
+- recording_gave_up_while_granted
+  - props: none. Sent when ScreenCaptureKit kept failing for 10 minutes while macOS reported access as granted; recording turns off and the permission notice shows.
+  - file: Core/Recording/ScreenRecorder.swift
+- recording_capture_recovered
+  - props: `failure_count: int`, `down_duration_bucket: 0-15s|15-60s|1-5m|5-20m|>20m`
+  - file: Core/Recording/ScreenRecorder.swift
+- screen_capture_denied_while_granted
+  - A ScreenCaptureKit request failed while `CGPreflightScreenCaptureAccess()` still reported access. This is the proxy for the spurious macOS Screen Recording prompt (GitHub issue #381): the prompt itself can't be observed. Throttled to one event per source per 10 minutes.
+  - props: `source: recorder_setup|recorder_refresh|recorder_capture|flow`, `error_domain: string`, `error_code: int`, `user_declined: bool` (SCStreamError.userDeclined, the code macOS returns while the prompt is up), `suppressed_count: int` (failures since the last event from this source), `capture_interval_s: int`, `display_count: int`, `since_unlock_bucket?: 0-15s|15-60s|1-5m|5-20m|>20m`, `since_wake_bucket?: same buckets`
+  - file: Core/Recording/ScreenCaptureMonitor.swift
+- screen_capture_burst
+  - At least 10 SCShareableContent fetches in the last minute. Throttled to one event per 10 minutes.
+  - props: `calls_last_minute: int`, `calls_recorder_setup: int`, `calls_recorder_refresh: int`, `calls_recorder_capture: int`, `calls_flow: int`, `since_unlock_bucket?: string`, `since_wake_bucket?: string`
+  - file: Core/Recording/ScreenCaptureMonitor.swift
 - chunk_created (sampled ~1%)
   - props: `duration_bucket: string`, `resolution_bucket: string`
   - file: Core/Recording/ScreenRecorder.swift
 
 ## AI / LLM / Analysis
 - analysis_job_started
-  - props: `provider: gemini|ollama|dayflow|chat_cli|unknown`
+  - props: compatibility family in `provider: gemini|ollama|dayflow|chat_cli|openai_compatible|unknown`, exact provider in `provider_id`
   - file: App/AppDelegate.swift
-- llm_api_call (sampled ~10%)
-  - props: `provider: string`, `model: string`, `latency_ms_bucket: <500ms|0.5-1.5s|>=1.5s`, `outcome: success|error`, `error_code?: int`
+- analysis_batch_started / analysis_batch_completed / analysis_batch_failed
+  - props: compatibility provider family in `llm_provider`, exact primary provider in `provider_id`, exact effective provider in `effective_provider_id` on completion, and exact configured backup in `backup_provider_id` on failure
+  - privacy: failures include a classified failure kind, never a raw error message
+  - file: Core/AI/LLMService.swift
+- backend_timeline_request_started / backend_timeline_request_succeeded / backend_timeline_request_failed
+  - props: `timeline_request_id`, `endpoint_host`, screenshot/card/category counts, `batch_id`; success adds `latency_ms`, byte sizes, `cards_count`, `observations_count`, `provider`, `model`; failure adds `error_domain`, `error_code`, `http_status`
+  - notes: one-step timeline generation on Dayflow Pro (screenshots to cards in a single backend call)
+  - privacy: counts and timings only, never screenshot or card content
+  - file: Core/AI/DayflowBackendProvider.swift
+- timeline_one_step_fallback
+  - props: `batch_id`, `provider`, `provider_id`, `error_domain`, `error_code`, `latency_ms`
+  - notes: the one-step call failed and the batch fell back to transcribe + generate; `analysis_batch_completed` carries `one_step` (bool)
+  - file: Core/AI/LLMService.swift
+- analysis_batch_auto_retried
+  - props: `batch_id: int`, `attempt: int` (1–3 per batch per app session), `succeeded: bool`
+  - when: after a successful batch, Dayflow retries failed batches from the last 24 hours, oldest first, stopping at the first failure
+  - file: Core/Analysis/AnalysisManager.swift
+- llm_timeline_failure_toast_shown / llm_timeline_failure_toast_clicked_settings / llm_timeline_failure_toast_copied_command / llm_timeline_failure_toast_dismissed
+  - props: `failure_kind`, `operation`, `destination`, `provider_name`, `waiting_seconds`, primary/backup provider ids and labels, `error_domain`, `error_code`, `batch_id?`
+  - when: bottom-right card for failures the person must fix (signed out, out of credits, CLI missing); never shown for transient, flaky model output or unknown failures
+  - files: System/TimelineFailureToast.swift, Views/UI/MainView/Layout.swift
+- llm_timeline_fallback_attempted / llm_timeline_fallback_succeeded / llm_timeline_fallback_failed
+  - props: compatibility provider families plus exact `primary_provider_id` and `backup_provider_id`; safe error domain/code metadata only
+  - file: Core/AI/LLMService.swift
+- llm_model_fallback
+  - props: compatibility family in `provider`, exact provider in `provider_id` when available, operation, `from_model`, `to_model`, reason, and optional batch ID
+  - privacy: model routing metadata only; prompts, responses, and raw errors are never included
+  - files: Core/AI/CodexProvider.swift, Core/AI/GeminiDirectProvider+Text.swift, Core/AI/GeminiDirectProvider+Transcription.swift, Core/AI/GeminiDirectProvider+ActivityCards.swift
+- llm_decode_failed
+  - props: compatibility family in `provider`, exact provider in `provider_id`, operation, failure reason, and output/stderr presence, length, JSON-removal, and optional sanitized non-JSON detail metadata
+  - privacy: non-JSON failure output is redacted and capped at 500 characters; braced/bracketed blocks and fenced JSON are removed first, and successful output is never emitted
+  - files: Core/AI/AgentCLISupport+Parsing.swift, Core/AI/AgentCLISupport+Transcription.swift
+- llm_validation_failed
+  - props: compatibility family in `provider`, exact provider in `provider_id`, operation, validation type, attempt, detail presence or length metadata, and an optional sanitized `error_detail`
+  - privacy: validation details are redacted and capped at 500 characters; raw model output, stderr, and generated card content are never sent to analytics
+  - files: Core/AI/CodexProvider+ActivityCards.swift, Core/AI/CodexProvider+Transcription.swift, Core/AI/ClaudeProvider+ActivityCards.swift, Core/AI/ClaudeProvider+Transcription.swift, System/AnalyticsService.swift
+- llm_api_call
+  - props: `provider: string`, `provider_id?: dayflow|gemini|chatgpt|claude|openai_compatible|local`, `model: string`, `operation: string`, `attempt: int`, `latency_ms: int`, `outcome: success|error`, `error_domain?: string`, `error_code?: int`, `error_message?: string`, `stdout_was_present?: bool`, `stdout_length?: int`, `stdout_json_removed?: bool`, `stdout_non_json_length?: int`, `stdout_non_json_detail?: string`, `stderr_was_present?: bool`, `stderr_length?: int`, `stderr_json_removed?: bool`, `stderr_non_json_length?: int`, `stderr_non_json_detail?: string`, `http_status?: int`, `has_response_body?: bool`, `response_body_bytes?: int`
+  - privacy: error messages and non-JSON failure stdout/stderr are redacted and capped at 500 characters; braced/bracketed blocks and fenced JSON are removed first, successful output is never emitted, and request/response bodies stay local
   - file: Core/AI/LLMLogger.swift
 
 <!-- Storage-related events intentionally removed -->

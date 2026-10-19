@@ -37,66 +37,81 @@ private struct RatedValue {
 }
 
 private struct ComparisonProvider: Identifiable {
-  let id: String
+  let providerID: LLMProviderID
   let title: String
-  /// Passed to onSelect — kept identical to the old card titles so
-  /// the selected_provider analytics values stay consistent.
-  let selectionName: String
   let accuracy: RatedValue
   let subscription: String
   let ease: RatedValue
   let notes: String
+
+  var id: String { providerID.rawValue }
 }
 
 // MARK: - Choose Provider Step
 
 struct OnboardingPrototypeChooseProviderStep: View {
-  let hasPaidAI: Bool
+  @Environment(\.stylePreviewAfter) private var stylePreviewAfter
   let flowID: String
   let flowVariant: String
-  let onSelect: (String) -> Void
+  let onSelect: (LLMProviderID) -> Void
 
   @ObservedObject private var authManager = DayflowAuthManager.shared
   @State private var isShowingDayflowProSignIn = false
   @State private var dayflowProInitialReferralCode = ""
-  @State private var isChatCLIInstalled = false
+  @State private var isCodexCLIInstalled = false
+  @State private var isClaudeCLIInstalled = false
 
   private static let providers: [ComparisonProvider] = [
     ComparisonProvider(
-      id: "dayflow",
-      title: "Dayflow Pro",
-      selectionName: "Dayflow Pro",
-      accuracy: RatedValue(text: "Best", rating: .best),
-      subscription: "30 day free trial",
-      ease: RatedValue(text: "Sign in and go", rating: .best),
-      notes: "Sync across devices"
+      providerID: .dayflow,
+      title: String(localized: "Dayflow Pro"),
+      accuracy: RatedValue(text: String(localized: "Best"), rating: .best),
+      subscription: String(localized: "7 day free trial"),
+      ease: RatedValue(text: String(localized: "Sign in and go"), rating: .best),
+      notes: String(localized: "Sync across devices")
     ),
     ComparisonProvider(
-      id: "chatgpt_claude",
-      title: "ChatGPT or Claude",
-      selectionName: "ChatGPT or Claude",
-      accuracy: RatedValue(text: "Best", rating: .best),
-      subscription: "ChatGPT/Claude paid subscription",
-      ease: RatedValue(text: "Requires installing CLI", rating: .medium),
-      notes: "Suitable for ChatGPT/Claude subscriptions, uses less than 1% of your daily limit."
+      providerID: .chatGPT,
+      title: String(localized: "ChatGPT"),
+      accuracy: RatedValue(text: String(localized: "Best"), rating: .best),
+      subscription: String(localized: "ChatGPT paid subscription"),
+      ease: RatedValue(text: String(localized: "Install Codex CLI"), rating: .medium),
+      notes: String(
+        localized: "Uses your ChatGPT subscription and less than 1% of your daily limit.")
     ),
     ComparisonProvider(
-      id: "gemini",
-      title: "Gemini",
-      selectionName: "Google Gemini",
-      accuracy: RatedValue(text: "Medium", rating: .medium),
-      subscription: "Free",
-      ease: RatedValue(text: "API key", rating: .medium),
-      notes: "Uses Gemini free tier."
+      providerID: .claude,
+      title: String(localized: "Claude"),
+      accuracy: RatedValue(text: String(localized: "Best"), rating: .best),
+      subscription: String(localized: "Claude paid subscription"),
+      ease: RatedValue(text: String(localized: "Install Claude CLI"), rating: .medium),
+      notes: String(
+        localized: "Uses your Claude subscription and less than 1% of your daily limit.")
     ),
     ComparisonProvider(
-      id: "local",
-      title: "Local AI",
-      selectionName: "Local AI",
-      accuracy: RatedValue(text: "Decent", rating: .basic),
-      subscription: "Free",
-      ease: RatedValue(text: "Extensive setup", rating: .basic),
-      notes: "Requires 16GB+ RAM, 4GB free disk space, M1 or later chip preferred"
+      providerID: .gemini,
+      title: String(localized: "Gemini"),
+      accuracy: RatedValue(text: String(localized: "Medium"), rating: .medium),
+      subscription: String(localized: "Free"),
+      ease: RatedValue(text: String(localized: "API key"), rating: .medium),
+      notes: String(localized: "Uses Gemini free tier.")
+    ),
+    ComparisonProvider(
+      providerID: .openAICompatible,
+      title: String(localized: "OpenRouter / Custom"),
+      accuracy: RatedValue(text: String(localized: "Varies"), rating: .medium),
+      subscription: String(localized: "API credits"),
+      ease: RatedValue(text: String(localized: "API key and model"), rating: .medium),
+      notes: String(localized: "Uses OpenRouter or any OpenAI-compatible endpoint.")
+    ),
+    ComparisonProvider(
+      providerID: .local,
+      title: String(localized: "Local AI"),
+      accuracy: RatedValue(text: String(localized: "Decent"), rating: .basic),
+      subscription: String(localized: "Free"),
+      ease: RatedValue(text: String(localized: "Extensive setup"), rating: .basic),
+      notes: String(
+        localized: "Requires 16GB+ RAM, 4GB free disk space, M1 or later chip preferred")
     ),
   ]
 
@@ -108,12 +123,14 @@ struct OnboardingPrototypeChooseProviderStep: View {
         .multilineTextAlignment(.center)
         .foregroundColor(Color(hex: "492304"))
         .frame(maxWidth: .infinity)
-        .padding(.top, 20)
-        .padding(.bottom, 45)
+        .padding(.top, 12)
+        .padding(.bottom, 24)
+
+      // 3 equal spacers above + 4 below keep the gap ratio at 3:4 as the window resizes.
+      ForEach(0..<3) { _ in Spacer(minLength: 0) }
 
       if isShowingDayflowProSignIn {
         DayflowProOnboardingSignInPanel(
-          hasPaidAI: hasPaidAI,
           flowID: flowID,
           flowVariant: flowVariant,
           layoutScale: 0.8,
@@ -125,7 +142,7 @@ struct OnboardingPrototypeChooseProviderStep: View {
             }
           },
           onComplete: {
-            onSelect("Dayflow Pro")
+            onSelect(.dayflow)
           }
         )
         .padding(.horizontal, 112)
@@ -136,15 +153,19 @@ struct OnboardingPrototypeChooseProviderStep: View {
           .transition(.opacity)
       }
 
-      Spacer(minLength: 20)
+      ForEach(0..<4) { _ in Spacer(minLength: 0) }
     }
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
     .task {
       let installed = await Task.detached(priority: .utility) {
-        CLIDetector.isInstalled(.codex) || CLIDetector.isInstalled(.claude)
+        (
+          codex: CLIDetector.isInstalled(.codex),
+          claude: CLIDetector.isInstalled(.claude)
+        )
       }.value
       guard !Task.isCancelled else { return }
-      isChatCLIInstalled = installed
+      isCodexCLIInstalled = installed.codex
+      isClaudeCLIInstalled = installed.claude
     }
   }
 
@@ -152,7 +173,6 @@ struct OnboardingPrototypeChooseProviderStep: View {
     OnboardingPrototypeAnalytics.trackDayflowProSelected(
       flowID: flowID,
       flowVariant: flowVariant,
-      hasPaidAI: hasPaidAI,
       selectionStage: "started_sign_in"
     )
     dayflowProInitialReferralCode = authManager.pendingReferralCode ?? ""
@@ -169,7 +189,7 @@ struct OnboardingPrototypeChooseProviderStep: View {
   // MARK: - Comparison Table
 
   private var comparisonTable: some View {
-    Grid(horizontalSpacing: 8, verticalSpacing: 22) {
+    Grid(horizontalSpacing: 8, verticalSpacing: 16) {
       GridRow(alignment: .top) {
         emptyLabelCell
         ForEach(Self.providers) { provider in
@@ -178,7 +198,7 @@ struct OnboardingPrototypeChooseProviderStep: View {
       }
 
       GridRow {
-        rowLabel("Model accuracy")
+        rowLabel(String(localized: "Model accuracy"))
         ForEach(Self.providers) { provider in
           ratedCell(provider.accuracy)
         }
@@ -187,7 +207,7 @@ struct OnboardingPrototypeChooseProviderStep: View {
       rowSeparator
 
       GridRow {
-        rowLabel("Subscription requirements")
+        rowLabel(String(localized: "Subscription requirements"))
         ForEach(Self.providers) { provider in
           subscriptionCell(provider.subscription)
         }
@@ -196,7 +216,7 @@ struct OnboardingPrototypeChooseProviderStep: View {
       rowSeparator
 
       GridRow {
-        rowLabel("Ease of set up")
+        rowLabel(String(localized: "Ease of set up"))
         ForEach(Self.providers) { provider in
           ratedCell(easeValue(for: provider))
         }
@@ -205,7 +225,7 @@ struct OnboardingPrototypeChooseProviderStep: View {
       rowSeparator
 
       GridRow(alignment: .top) {
-        rowLabel("Additional notes")
+        rowLabel(String(localized: "Additional notes"))
         ForEach(Self.providers) { provider in
           notesCell(provider.notes)
         }
@@ -215,11 +235,11 @@ struct OnboardingPrototypeChooseProviderStep: View {
         emptyLabelCell
         ForEach(Self.providers) { provider in
           selectButton(for: provider)
-            .padding(.top, 14)
+            .padding(.top, 8)
         }
       }
     }
-    .frame(maxWidth: 1060)
+    .frame(maxWidth: 1120)
   }
 
   private var emptyLabelCell: some View {
@@ -244,20 +264,22 @@ struct OnboardingPrototypeChooseProviderStep: View {
 
   private func providerHeader(_ provider: ComparisonProvider) -> some View {
     VStack(spacing: 7) {
-      headerIcon(for: provider.id)
+      headerIcon(for: provider.providerID)
       Text(provider.title)
         .font(.custom("Figtree", size: 16))
         .fontWeight(.semibold)
         .foregroundColor(.black)
+        .multilineTextAlignment(.center)
+        .fixedSize(horizontal: false, vertical: true)
     }
     .frame(maxWidth: .infinity)
-    .padding(.bottom, 14)
+    .padding(.bottom, 8)
   }
 
   @ViewBuilder
-  private func headerIcon(for id: String) -> some View {
-    switch id {
-    case "dayflow":
+  private func headerIcon(for providerID: LLMProviderID) -> some View {
+    switch providerID {
+    case .dayflow:
       Image("DayflowLogo")
         .resizable()
         .renderingMode(.original)
@@ -265,14 +287,15 @@ struct OnboardingPrototypeChooseProviderStep: View {
         .antialiased(true)
         .scaledToFit()
         .frame(width: 36, height: 36)
-    case "chatgpt_claude":
-      HStack(spacing: 9) {
-        iconCircle(imageName: "ChatGPTLogo")
-        iconCircle(imageName: "ClaudeLogo")
-      }
-    case "gemini":
+    case .chatGPT:
+      iconCircle(imageName: "ChatGPTLogo")
+    case .claude:
+      iconCircle(imageName: "ClaudeLogo")
+    case .gemini:
       iconCircle(imageName: "GeminiLogo")
-    default:
+    case .openAICompatible:
+      iconCircle(systemName: "network")
+    case .local:
       iconCircle(systemName: "laptopcomputer")
     }
   }
@@ -301,10 +324,12 @@ struct OnboardingPrototypeChooseProviderStep: View {
       .overlay(Circle().stroke(Color.black.opacity(0.06), lineWidth: 1))
   }
 
-  /// The ChatGPT/Claude column upgrades to green once a CLI is detected on this Mac.
   private func easeValue(for provider: ComparisonProvider) -> RatedValue {
-    if provider.id == "chatgpt_claude", isChatCLIInstalled {
-      return RatedValue(text: "CLI installed", rating: .best)
+    if provider.providerID == .chatGPT, isCodexCLIInstalled {
+      return RatedValue(text: String(localized: "CLI installed"), rating: .best)
+    }
+    if provider.providerID == .claude, isClaudeCLIInstalled {
+      return RatedValue(text: String(localized: "CLI installed"), rating: .best)
     }
     return provider.ease
   }
@@ -342,25 +367,26 @@ struct OnboardingPrototypeChooseProviderStep: View {
   private func selectButton(for provider: ComparisonProvider) -> some View {
     DayflowSurfaceButton(
       action: {
-        if provider.id == "dayflow" {
+        if provider.providerID == .dayflow {
           startDayflowProSignIn()
         } else {
-          onSelect(provider.selectionName)
+          onSelect(provider.providerID)
         }
       },
       content: {
         Text("Select")
-          .font(.custom("Nunito", size: 14))
+          .font(.custom(stylePreviewAfter ? "Figtree" : "Nunito", size: 14))
           .fontWeight(.semibold)
           .tracking(-0.14)
       },
-      background: Color(hex: "402C00"),
+      background: Color(hex: "FF9F6F"),
       foreground: .white,
-      borderColor: .clear,
-      cornerRadius: 8,
+      borderColor: Color(hex: "F4C8B1"),
+      cornerRadius: 200,
       horizontalPadding: 40,
       verticalPadding: 8,
-      showOverlayStroke: true
+      showOverlayStroke: false,
+      innerGlowColor: Color(hex: "FFDCCB").opacity(0.9)
     )
   }
 }

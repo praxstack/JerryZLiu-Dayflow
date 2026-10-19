@@ -16,6 +16,10 @@ final class StorageSettingsViewModel: ObservableObject {
   @Published var timelapsesLimitIndex: Int
   @Published var showLimitConfirmation = false
   @Published var pendingLimit: PendingLimit?
+  @Published var captureHeight: Int = ScreenshotConfig.captureHeight
+  @Published var captureInterval: TimeInterval = ScreenshotConfig.interval
+  /// Measured from the last hour of finalized segments; nil until enough has been recorded.
+  @Published var observedBytesPerHour: Int64?
 
   let usageFormatter: ByteCountFormatter = {
     let formatter = ByteCountFormatter()
@@ -72,12 +76,15 @@ final class StorageSettingsViewModel: ObservableObject {
 
       let recordingsSize = StorageSettingsViewModel.directorySize(at: recordingsURL)
       let timelapseSize = TimelapseStorageManager.shared.currentUsageBytes()
+      let observedRate = StorageManager.shared.observedRecordingBytesPerHour(
+        since: Date().addingTimeInterval(-3600))
 
       await MainActor.run {
         guard let self else { return }
         self.storagePermissionGranted = permission
         self.recordingsUsageBytes = recordingsSize
         self.timelapseUsageBytes = timelapseSize
+        self.observedBytesPerHour = observedRate
         self.lastStorageCheck = Date()
         self.isRefreshingStorage = false
 
@@ -91,15 +98,55 @@ final class StorageSettingsViewModel: ObservableObject {
     }
   }
 
+  // MARK: - Recording quality
+
+  func setCaptureHeight(_ height: Int) {
+    guard height != captureHeight else { return }
+    ScreenshotConfig.captureHeight = height
+    captureHeight = height
+    AnalyticsService.shared.capture("capture_height_changed", ["height": height])
+  }
+
+  func setCaptureInterval(_ interval: TimeInterval) {
+    guard interval != captureInterval else { return }
+    ScreenshotConfig.interval = interval
+    captureInterval = interval
+    AnalyticsService.shared.capture("capture_interval_changed", ["interval_seconds": interval])
+  }
+
+  /// "≈ 10 MB per hour · ≈ 2.5 GB per month at 8 h/day"
+  func recordingEstimateText() -> String {
+    let perHour = ScreenshotConfig.estimatedBytesPerHour(
+      height: captureHeight, interval: captureInterval)
+    let perMonth = perHour * 8 * 30
+    return
+      String(
+        localized:
+          "≈ \(usageFormatter.string(fromByteCount: perHour)) per hour · ≈ \(usageFormatter.string(fromByteCount: perMonth)) per month at 8 h/day"
+      )
+  }
+
+  func observedRateText() -> String? {
+    guard let observedBytesPerHour else { return nil }
+    return
+      String(
+        localized:
+          "Measured over the last hour: \(usageFormatter.string(fromByteCount: observedBytesPerHour)) per hour"
+      )
+  }
+
   func storageFooterText() -> String {
     let recordingsText =
       recordingsLimitBytes == Int64.max
-      ? "Unlimited" : usageFormatter.string(fromByteCount: recordingsLimitBytes)
+      ? String(localized: "Unlimited") : usageFormatter.string(fromByteCount: recordingsLimitBytes)
     let timelapsesText =
       timelapsesLimitBytes == Int64.max
-      ? "Unlimited" : usageFormatter.string(fromByteCount: timelapsesLimitBytes)
+      ? String(localized: "Unlimited") : usageFormatter.string(fromByteCount: timelapsesLimitBytes)
     return
-      "Recording cap: \(recordingsText) • Timelapse cap: \(timelapsesText). Lowering a cap immediately deletes the oldest files for that type. Timeline card text stays preserved. Please avoid deleting files manually so you do not remove Dayflow's database."
+      String(
+        localized:
+          "Recording cap: \(recordingsText) • Timelapse cap: \(timelapsesText). Lowering a cap immediately deletes the oldest files for that type. Timeline card text stays preserved. Please avoid deleting files manually so you do not remove Dayflow's database."
+      )
   }
 
   func handleLimitSelection(for category: StorageCategory, index: Int) {
@@ -213,13 +260,13 @@ final class StorageSettingsViewModel: ObservableObject {
   }
 
   static let storageOptions: [StorageLimitOption] = [
-    StorageLimitOption(id: 0, label: "1 GB", bytes: 1_000_000_000),
-    StorageLimitOption(id: 1, label: "2 GB", bytes: 2_000_000_000),
-    StorageLimitOption(id: 2, label: "3 GB", bytes: 3_000_000_000),
-    StorageLimitOption(id: 3, label: "5 GB", bytes: 5_000_000_000),
-    StorageLimitOption(id: 4, label: "10 GB", bytes: 10_000_000_000),
-    StorageLimitOption(id: 5, label: "20 GB", bytes: 20_000_000_000),
-    StorageLimitOption(id: 6, label: "Unlimited", bytes: nil),
+    StorageLimitOption(id: 0, label: String(localized: "1 GB"), bytes: 1_000_000_000),
+    StorageLimitOption(id: 1, label: String(localized: "2 GB"), bytes: 2_000_000_000),
+    StorageLimitOption(id: 2, label: String(localized: "3 GB"), bytes: 3_000_000_000),
+    StorageLimitOption(id: 3, label: String(localized: "5 GB"), bytes: 5_000_000_000),
+    StorageLimitOption(id: 4, label: String(localized: "10 GB"), bytes: 10_000_000_000),
+    StorageLimitOption(id: 5, label: String(localized: "20 GB"), bytes: 20_000_000_000),
+    StorageLimitOption(id: 6, label: String(localized: "Unlimited"), bytes: nil),
   ]
 }
 
@@ -230,8 +277,8 @@ struct StorageLimitOption: Identifiable {
 
   var resolvedBytes: Int64 { bytes ?? Int64.max }
   var shortLabel: String {
-    if bytes == nil { return "∞" }
-    return label.replacingOccurrences(of: " GB", with: "")
+    guard let bytes else { return "∞" }
+    return (bytes / 1_000_000_000).formatted()
   }
 }
 
@@ -248,8 +295,8 @@ enum StorageCategory {
 
   var displayName: String {
     switch self {
-    case .recordings: return "Recordings"
-    case .timelapses: return "Timelapses"
+    case .recordings: return String(localized: "Recordings")
+    case .timelapses: return String(localized: "Timelapses")
     }
   }
 }

@@ -18,6 +18,20 @@ final class DailyRecapCardsTextTests: XCTestCase {
     XCTAssertEqual(onlyFailed, "No timeline activities were recorded for 2026-06-16.")
   }
 
+  func testTruncationKeepsEarliestCardsInFourAMDayOrder() {
+    let cards = [
+      cardAt(start: "10:00 AM", end: "10:01 AM", title: "Late morning"),
+      cardAt(start: "1:00 AM", end: "1:01 AM", title: "After midnight"),
+      cardAt(start: "9:00 AM", end: "9:01 AM", title: "First morning"),
+    ]
+    let text = DailyRecapGenerator.makeCardsText(day: "2026-06-16", cards: cards, maxCharacters: 100)
+
+    XCTAssertTrue(text.contains("First morning"))
+    XCTAssertFalse(text.contains("Late morning"))
+    XCTAssertFalse(text.contains("After midnight"))
+    XCTAssertEqual(text.split(separator: "\n").filter { $0.contains(": ") && $0.first?.isNumber == true }.count, 1)
+  }
+
   func testTruncatesDeterministicallyWhenOverCharacterBudget() {
     let cards = (0..<50).map { card(title: "Activity number \($0)", minute: $0) }
     let makeText = {
@@ -84,6 +98,16 @@ final class DailyRecapCardsTextTests: XCTestCase {
     )
     XCTAssertFalse(text.contains("omitted"))
     XCTAssertTrue(text.contains("3. 9:02am - 9:03am: Task 2"))
+  }
+
+  private func cardAt(start: String, end: String, title: String) -> TimelineCard {
+    TimelineCard(
+      recordId: nil, batchId: nil,
+      startTimestamp: start, endTimestamp: end,
+      category: "Work", subcategory: "Coding",
+      title: title, summary: "", detailedSummary: "", day: "2026-06-16",
+      distractions: nil, videoSummaryURL: nil, otherVideoSummaryURLs: nil, appSites: nil
+    )
   }
 
   private func card(title: String, minute: Int, summary: String = "") -> TimelineCard {

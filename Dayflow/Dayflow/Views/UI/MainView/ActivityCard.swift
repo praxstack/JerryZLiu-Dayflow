@@ -10,8 +10,11 @@ struct ActivityCard: View {
   var scrollSummary: Bool = false
   var hasAnyActivities: Bool = true
   var onCategoryChange: ((TimelineCategory, TimelineActivity) -> Void)? = nil
+  var onTitleChange: ((String, TimelineActivity) -> Void)? = nil
   var onNavigateToCategoryEditor: (() -> Void)? = nil
   var onRetryBatchCompleted: ((Int64) -> Void)? = nil
+  @Environment(\.dayflowTheme) private var theme
+  @Environment(\.stylePreviewAfter) private var stylePreviewAfter
   @EnvironmentObject private var appState: AppState
   @EnvironmentObject private var categoryStore: CategoryStore
   @EnvironmentObject private var retryCoordinator: RetryCoordinator
@@ -19,6 +22,10 @@ struct ActivityCard: View {
     false
 
   @State private var showCategoryPicker = false
+  @State private var isEditingTitle = false
+  @State private var draftTitle = ""
+  @State private var isHoveringTitle = false
+  @FocusState private var titleFieldFocused: Bool
   @State private var isPreparingSlideshow = false
   @State private var slideshowError: String?
   @State private var slideshowRequestID = 0
@@ -32,9 +39,11 @@ struct ActivityCard: View {
 
   private let timeFormatter: DateFormatter = {
     let formatter = DateFormatter()
-    formatter.dateFormat = "h:mm a"
+    formatter.timeStyle = .short
     return formatter
   }()
+
+  private var usesDarkChrome: Bool { stylePreviewAfter && theme.isDark }
 
   var body: some View {
     if let activity = activity {
@@ -57,13 +66,25 @@ struct ActivityCard: View {
               commitCategorySelection(selectedCategory, for: activity)
             },
             onNavigateToEditor: {
-              withAnimation(.spring(response: 0.25, dampingFraction: 0.85)) {
+              withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
                 showCategoryPicker = false
               }
               onNavigateToCategoryEditor?()
+            },
+            onDismiss: {
+              withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                showCategoryPicker = false
+              }
             }
           )
-          .transition(.move(edge: .top).combined(with: .opacity))
+          .transition(
+            .asymmetric(
+              insertion: .move(edge: .top).combined(with: .opacity)
+                .animation(.spring(response: 0.3, dampingFraction: 0.85)),
+              removal: .move(edge: .top).combined(with: .opacity)
+                .animation(.easeIn(duration: 0.3))
+            )
+          )
           .zIndex(1)
         }
       }
@@ -72,6 +93,8 @@ struct ActivityCard: View {
       }
       .onChange(of: activity.id) {
         showCategoryPicker = false
+        isEditingTitle = false
+        isHoveringTitle = false
         isPreparingSlideshow = false
         slideshowError = nil
         slideshowRequestID &+= 1
@@ -153,12 +176,7 @@ struct ActivityCard: View {
       // Header
       HStack(alignment: .center) {
         VStack(alignment: .leading, spacing: 6) {
-          Text(activity.title)
-            .font(
-              Font.custom("Figtree", size: 16)
-                .weight(.semibold)
-            )
-            .foregroundColor(.black)
+          titleView(for: activity)
 
           HStack(alignment: .center, spacing: 6) {
             Text(
@@ -167,16 +185,25 @@ struct ActivityCard: View {
             .font(
               Font.custom("Figtree", size: 12)
             )
-            .foregroundColor(Color(red: 0.4, green: 0.4, blue: 0.4))
+            .foregroundColor(
+              usesDarkChrome ? theme.textSecondary : Color(red: 0.2, green: 0.2, blue: 0.2)
+            )
             .lineLimit(1)
-            .padding(.horizontal, 6)
+            .padding(.horizontal, usesDarkChrome ? 6 : 8)
             .padding(.vertical, 4)
-            .background(Color(red: 0.96, green: 0.94, blue: 0.91).opacity(0.9))
+            .background(
+              usesDarkChrome
+                ? Color(hex: "494B5B")
+                : Color.white.opacity(0.76)
+            )
             .cornerRadius(6)
             .overlay(
               RoundedRectangle(cornerRadius: 6)
-                .inset(by: 0.38)
-                .stroke(Color(red: 0.9, green: 0.9, blue: 0.9), lineWidth: 0.75)
+                .inset(by: usesDarkChrome ? 0.38 : 0.25)
+                .stroke(
+                  usesDarkChrome ? Color(hex: "888888") : Color(red: 0.88, green: 0.88, blue: 0.88),
+                  lineWidth: usesDarkChrome ? 0.75 : 0.5
+                )
             )
 
             Spacer(minLength: 6)
@@ -190,35 +217,35 @@ struct ActivityCard: View {
 
                   Text(badge.name)
                     .font(Font.custom("Figtree", size: 12))
-                    .foregroundColor(Color(red: 0.2, green: 0.2, blue: 0.2))
+                    .foregroundColor(
+                      usesDarkChrome ? theme.chipText : Color(red: 0.2, green: 0.2, blue: 0.2)
+                    )
                     .lineLimit(1)
                 }
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
-                .background(Color.white.opacity(0.76))
+                .background(usesDarkChrome ? theme.chipFill : Color.white.opacity(0.76))
                 .cornerRadius(6)
                 .overlay(
                   RoundedRectangle(cornerRadius: 6)
                     .inset(by: 0.25)
-                    .stroke(Color(red: 0.88, green: 0.88, blue: 0.88), lineWidth: 0.5)
+                    .stroke(
+                      usesDarkChrome ? theme.chipBorder : Color(red: 0.88, green: 0.88, blue: 0.88),
+                      lineWidth: 0.5
+                    )
                 )
               }
 
               if !isFailedCard(activity) {
-                Button(action: {
-                  withAnimation(.spring(response: 0.25, dampingFraction: 0.85)) {
-                    showCategoryPicker.toggle()
-                  }
-                }) {
-                  Image("CategorySwapButton")
-                    .resizable()
-                    .renderingMode(.original)
-                    .frame(width: 24, height: 24)
-                }
-                .buttonStyle(PlainButtonStyle())
-                .hoverScaleEffect(scale: 1.02)
-                .pointingHandCursorOnHover(reassertOnPressEnd: true)
-                .accessibilityLabel(Text("Change category"))
+                CategoryEditCircleButton(
+                  action: {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                      showCategoryPicker.toggle()
+                    }
+                  },
+                  diameter: 24,
+                  accessibilityLabel: String(localized: "Change category")
+                )
               }
             }
           }
@@ -283,6 +310,63 @@ struct ActivityCard: View {
   }
 
   @ViewBuilder
+  private func titleView(for activity: TimelineActivity) -> some View {
+    if isEditingTitle {
+      TextField("Title", text: $draftTitle)
+        .textFieldStyle(.plain)
+        .font(
+          Font.custom("Figtree", size: 16)
+            .weight(.semibold)
+        )
+        .foregroundColor(stylePreviewAfter && theme.isDark ? .white : .black)
+        .focused($titleFieldFocused)
+        .onSubmit { commitTitleEdit(for: activity) }
+        .onExitCommand { isEditingTitle = false }
+        .onChange(of: titleFieldFocused) {
+          // Losing focus commits, matching Finder's rename behavior.
+          if !titleFieldFocused && isEditingTitle {
+            commitTitleEdit(for: activity)
+          }
+        }
+    } else {
+      HStack(alignment: .center, spacing: 6) {
+        Text(isFailedCard(activity) ? String(localized: "Processing failed") : activity.title)
+          .font(
+            Font.custom("Figtree", size: 16)
+              .weight(.semibold)
+          )
+          .foregroundColor(stylePreviewAfter && theme.isDark ? .white : .black)
+          .onTapGesture { startTitleEdit(for: activity) }
+
+        if isHoveringTitle && !isFailedCard(activity) {
+          CategoryEditCircleButton(
+            action: { startTitleEdit(for: activity) },
+            diameter: 24,
+            accessibilityLabel: String(localized: "Edit title")
+          )
+        }
+      }
+      .onHover { hovering in
+        isHoveringTitle = hovering
+      }
+    }
+  }
+
+  private func startTitleEdit(for activity: TimelineActivity) {
+    guard !isFailedCard(activity) else { return }
+    draftTitle = activity.title
+    isEditingTitle = true
+    titleFieldFocused = true
+  }
+
+  private func commitTitleEdit(for activity: TimelineActivity) {
+    isEditingTitle = false
+    let trimmed = draftTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty, trimmed != activity.title else { return }
+    onTitleChange?(trimmed, activity)
+  }
+
+  @ViewBuilder
   private func summaryContent(for activity: TimelineActivity) -> some View {
     VStack(alignment: .leading, spacing: 8) {
       VStack(alignment: .leading, spacing: 3) {
@@ -293,17 +377,19 @@ struct ActivityCard: View {
           )
           .foregroundColor(Color(red: 0.55, green: 0.55, blue: 0.55))
 
-        renderMarkdownText(activity.summary)
+        renderMarkdownText(summaryText(for: activity))
           .font(
             Font.custom("Figtree", size: 12)
           )
-          .foregroundColor(.black)
+          .foregroundColor(stylePreviewAfter && theme.isDark ? .white : .black)
           .lineLimit(nil)
           .fixedSize(horizontal: false, vertical: true)
           .textSelection(.enabled)
       }
 
-      if !activity.detailedSummary.isEmpty && activity.detailedSummary != activity.summary {
+      if !isFailedCard(activity) && !activity.detailedSummary.isEmpty
+        && activity.detailedSummary != activity.summary
+      {
         VStack(alignment: .leading, spacing: 3) {
           Text("DETAILED SUMMARY")
             .font(
@@ -316,13 +402,26 @@ struct ActivityCard: View {
             .font(
               Font.custom("Figtree", size: 12)
             )
-            .foregroundColor(.black)
+            .foregroundColor(stylePreviewAfter && theme.isDark ? .white : .black)
             .lineLimit(nil)
             .fixedSize(horizontal: false, vertical: true)
             .textSelection(.enabled)
         }
       }
     }
+  }
+
+  /// Failed cards saved before the failure rework carry raw error text
+  /// ("Failed to process 15 minutes… An unexpected error occurred."), so they
+  /// get a plain sentence instead. Newer failed cards are already plain.
+  private func summaryText(for activity: TimelineActivity) -> String {
+    guard isFailedCard(activity), activity.summary.hasPrefix("Failed to process") else {
+      return activity.summary
+    }
+    return String(
+      localized:
+        "This time couldn't be turned into cards yet. Dayflow will try again automatically. Your recording is saved."
+    )
   }
 
   private func renderMarkdownText(_ content: String) -> Text {
@@ -408,7 +507,7 @@ struct ActivityCard: View {
       .background(Color(red: 0.91, green: 0.85, blue: 0.8))
       .cornerRadius(200)
     } else {
-      // Retry button - orange pill
+      // Retry button - orange pill matching the primary "Resume" button
       Button(action: { handleRetry(for: activity) }) {
         HStack(alignment: .center, spacing: 4) {
           Text("Retry")
@@ -416,11 +515,20 @@ struct ActivityCard: View {
           Image(systemName: "arrow.clockwise")
             .font(.system(size: 13, weight: .medium))
         }
-        .foregroundColor(.white)
+        .foregroundColor(theme.primaryButtonText)
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(Color(red: 1, green: 0.54, blue: 0.17))
-        .cornerRadius(200)
+        .background(
+          Capsule(style: .continuous)
+            .fill(theme.primaryButtonFill)
+            .overlay(
+              InnerGlow(
+                shape: Capsule(style: .continuous), color: theme.primaryButtonInnerGlow, radius: 3)
+            )
+            .overlay(
+              Capsule(style: .continuous).strokeBorder(theme.primaryButtonBorder, lineWidth: 1)
+            )
+        )
       }
       .buttonStyle(PlainButtonStyle())
       .disabled(isDisabled)
@@ -443,7 +551,7 @@ struct ActivityCard: View {
       .lowercased()
     let normalizedNew = category.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
 
-    withAnimation(.spring(response: 0.25, dampingFraction: 0.85)) {
+    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
       showCategoryPicker = false
     }
 
@@ -503,7 +611,7 @@ struct ActivityCard: View {
         .contentShape(Rectangle())
         .onTapGesture {
           guard let cardId = activity.recordId else {
-            slideshowError = "This activity cannot load a slideshow."
+            slideshowError = String(localized: "This activity cannot load a slideshow.")
             return
           }
           openSlideshow(for: activity, cardId: cardId)
@@ -590,17 +698,17 @@ struct ActivityCard: View {
     let targetSize = CGSize(width: max(1, size.width), height: max(1, size.height))
 
     Task {
-      let screenshotURL = await ActivityCardTimelapseGenerator.shared.middleScreenshotURL(
+      let screenshot = await ActivityCardTimelapseGenerator.shared.middleScreenshot(
         forCardId: cardId)
       await MainActor.run {
         guard requestID == timelapsePreviewRequestID else { return }
-        guard let screenshotURL else {
+        guard let screenshot else {
           timelapsePreviewThumbnail = nil
           return
         }
 
         ScreenshotThumbnailCache.shared.fetchThumbnail(
-          fileURL: screenshotURL, targetSize: targetSize
+          screenshot: screenshot, targetSize: targetSize
         ) { image in
           guard requestID == timelapsePreviewRequestID else { return }
           timelapsePreviewThumbnail = image
@@ -617,9 +725,9 @@ private enum ActivityCardTimelapseError: LocalizedError {
   var errorDescription: String? {
     switch self {
     case .timelineCardMissing:
-      return "Could not find this activity in storage."
+      return String(localized: "Could not find this activity in storage.")
     case .noScreenshots:
-      return "No screenshots are available for this activity range."
+      return String(localized: "No screenshots are available for this activity range.")
     }
   }
 }
@@ -648,11 +756,10 @@ private actor ActivityCardTimelapseGenerator {
     return screenshots
   }
 
-  func middleScreenshotURL(forCardId cardId: Int64) -> URL? {
+  func middleScreenshot(forCardId cardId: Int64) -> Screenshot? {
     guard let screenshots = try? screenshots(forCardId: cardId), !screenshots.isEmpty else {
       return nil
     }
-    let middleIndex = screenshots.count / 2
-    return screenshots[middleIndex].fileURL
+    return screenshots[screenshots.count / 2]
   }
 }

@@ -14,9 +14,12 @@ let dayKeyFormatter: DateFormatter = {
   let formatter = DateFormatter()
   formatter.dateFormat = "yyyy-MM-dd"
   formatter.locale = Locale(identifier: "en_US_POSIX")
-  formatter.timeZone = Calendar.current.timeZone
   return formatter
 }()
+
+private func syncDayKeyFormatterTimeZone() {
+  dayKeyFormatter.timeZone = Calendar.current.timeZone
+}
 
 public struct DayWindow {
   public let dayKey: String  // "2026-03-11"
@@ -33,6 +36,7 @@ public struct DayWindow {
 /// The Dayflow day containing `date`. Before 4 AM this resolves to the
 /// previous calendar day, matching Date.getDayInfoFor4AMBoundary() in the app.
 public func dayWindow(containing date: Date) -> DayWindow {
+  syncDayKeyFormatterTimeZone()
   let calendar = Calendar.current
   let fourAM = calendar.date(bySettingHour: 4, minute: 0, second: 0, of: date) ?? date
   let start = date < fourAM ? calendar.date(byAdding: .day, value: -1, to: fourAM)! : fourAM
@@ -44,6 +48,7 @@ public func dayWindow(containing date: Date) -> DayWindow {
 /// unparseable input. Matches fetchTimelineCards(forDay:) in the app: 4 AM on
 /// the named day through 4 AM the next day.
 public func dayWindow(forKey key: String) -> DayWindow? {
+  syncDayKeyFormatterTimeZone()
   guard let dayDate = dayKeyFormatter.date(from: key) else { return nil }
   let calendar = Calendar.current
   var startComponents = calendar.dateComponents([.year, .month, .day], from: dayDate)

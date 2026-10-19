@@ -2,15 +2,24 @@ import Foundation
 import XCTest
 import DayflowCLICore
 
-final class DayBoundaryTests: XCTestCase {
-  private var utcCalendar: Calendar {
-    var calendar = Calendar(identifier: .gregorian)
-    calendar.timeZone = TimeZone(identifier: "UTC")!
-    return calendar
+#if canImport(Glibc)
+import Glibc
+#else
+import Darwin
+#endif
+
+final class DayBoundaryTests: DayflowTimeZoneTestCase {
+  override func setUp() {
+    super.setUp()
+    pinTimeZone("UTC")
+  }
+
+  private var calendar: Calendar {
+    Calendar.current
   }
 
   func testBeforeFourAMBelongsToPreviousDay() {
-    let calendar = utcCalendar
+    let calendar = calendar
     let date = makeDate(calendar: calendar, year: 2026, month: 3, day: 11, hour: 3, minute: 30)
     let window = dayWindow(containing: date)
     XCTAssertEqual(window.dayKey, expectedKey(calendar: calendar, year: 2026, month: 3, day: 10))
@@ -20,31 +29,33 @@ final class DayBoundaryTests: XCTestCase {
   }
 
   func testFourAMStartsNamedDay() {
-    let calendar = utcCalendar
+    let calendar = calendar
     let date = makeDate(calendar: calendar, year: 2026, month: 3, day: 11, hour: 4, minute: 0)
     let window = dayWindow(containing: date)
     XCTAssertEqual(window.dayKey, expectedKey(calendar: calendar, year: 2026, month: 3, day: 11))
   }
 
   func testForKeyRejectsGarbage() {
+    pinTimeZone("UTC")
     XCTAssertNil(dayWindow(forKey: "not-a-date"))
     XCTAssertNil(dayWindow(forKey: ""))
     XCTAssertNil(dayWindow(forKey: "11 March 2026"))
   }
 
   func testForKeyBuildsFourAMWindow() {
+    pinTimeZone("UTC")
     guard let window = dayWindow(forKey: "2026-03-11") else {
       XCTFail("expected a window")
       return
     }
     XCTAssertEqual(window.dayKey, "2026-03-11")
-    XCTAssertEqual(utcCalendar.component(.hour, from: window.start), 4)
+    XCTAssertEqual(calendar.component(.hour, from: window.start), 4)
     let hours = window.end.timeIntervalSince(window.start) / 3600
     XCTAssertEqual(hours, 24, accuracy: 0.01)
   }
 
   func testWeekWindowMondayBeforeFourAMUsesPriorWeek() {
-    let calendar = utcCalendar
+    let calendar = calendar
     let date = makeDate(calendar: calendar, year: 2026, month: 3, day: 9, hour: 3, minute: 30)
     let window = weekWindow(containing: date)
     let expectedStart = makeDate(calendar: calendar, year: 2026, month: 3, day: 2, hour: 4, minute: 0)
@@ -53,11 +64,24 @@ final class DayBoundaryTests: XCTestCase {
   }
 
   func testWeekWindowAfterMondayFourAMStartsCurrentWeek() {
-    let calendar = utcCalendar
+    let calendar = calendar
     let date = makeDate(calendar: calendar, year: 2026, month: 3, day: 9, hour: 4, minute: 30)
     let window = weekWindow(containing: date)
     let expectedStart = makeDate(calendar: calendar, year: 2026, month: 3, day: 9, hour: 4, minute: 0)
     XCTAssertEqual(window.start, expectedStart)
+  }
+
+  func testSpringForwardDayWindowLengthInLosAngeles() {
+    pinTimeZone("America/Los_Angeles")
+    let calendar = calendar
+    guard let window = dayWindow(forKey: "2026-03-08") else {
+      XCTFail("expected a window")
+      return
+    }
+    let hours = window.end.timeIntervalSince(window.start) / 3600
+    XCTAssertEqual(hours, 23, accuracy: 0.01)
+    XCTAssertEqual(calendar.component(.hour, from: window.start), 4)
+    XCTAssertEqual(calendar.component(.hour, from: window.end), 4)
   }
 
   func testFormatDuration() {

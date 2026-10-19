@@ -63,7 +63,12 @@ final class JSONOutTests: XCTestCase {
   }
 }
 
-final class QueriesTests: XCTestCase {
+final class QueriesTests: DayflowTimeZoneTestCase {
+  override func setUp() {
+    super.setUp()
+    pinTimeZone("UTC")
+  }
+
   func testFetchActivitiesReturnsFixtureCardsInDayWindow() throws {
     let dbPath = try makeFixture()
     defer { try? FileManager.default.removeItem(atPath: dbPath) }
@@ -91,6 +96,45 @@ final class QueriesTests: XCTestCase {
     let dayCards = try fetchActivities(db: db, window: window)
     XCTAssertEqual(Set(dayCards.map(\.recordId)), Set(all.map(\.recordId)))
     XCTAssertEqual(dayCards.count, 2)
+  }
+
+  func testDayWindowExcludesPreFourAMUtcRow() throws {
+    let dbPath = try makeFixture()
+    defer { try? FileManager.default.removeItem(atPath: dbPath) }
+    try runSQL(
+      dbPath,
+      """
+      INSERT INTO timeline_cards (
+        start, end, start_ts, end_ts, day, title, summary, category, subcategory,
+        detailed_summary, metadata
+      ) VALUES (
+        '3:30 AM', '3:45 AM',
+        strftime('%s', '2026-03-11 03:30:00'),
+        strftime('%s', '2026-03-11 03:45:00'),
+        '2026-03-11',
+        'Before boundary',
+        'Should belong to the previous Dayflow day in UTC.',
+        'Work', 'Engineering',
+        'Boundary row for day-window tests.',
+        '{}'
+      );
+      """
+    )
+    let db = try Database(path: dbPath)
+    guard let window = dayWindow(forKey: "2026-03-11") else {
+      XCTFail("expected day window")
+      return
+    }
+    let dayCards = try fetchActivities(db: db, window: window)
+    XCTAssertEqual(dayCards.count, 2)
+    XCTAssertFalse(dayCards.map(\.title).contains("Before boundary"))
+
+    guard let preFourAM = dayWindow(forKey: "2026-03-10") else {
+      XCTFail("expected previous day window")
+      return
+    }
+    let priorDayCards = try fetchActivities(db: db, window: preFourAM)
+    XCTAssertTrue(priorDayCards.map(\.title).contains("Before boundary"))
   }
 
   func testSearchAndSingleCard() throws {

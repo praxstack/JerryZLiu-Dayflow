@@ -212,12 +212,21 @@ enum AgentUsageTelemetry {
     let lockFD = Darwin.open(lockURL.path, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR)
     #endif
     guard lockFD >= 0 else { return }
-    fchmod(lockFD, S_IRUSR | S_IWUSR)
+    #if os(Linux)
+    Glibc.fchmod(lockFD, S_IRUSR | S_IWUSR)
     defer {
-      flock(lockFD, LOCK_UN)
-      close(lockFD)
+      Glibc.flock(lockFD, LOCK_UN)
+      Glibc.close(lockFD)
     }
-    guard flock(lockFD, LOCK_EX) == 0 else { return }
+    guard Glibc.flock(lockFD, LOCK_EX) == 0 else { return }
+    #else
+    Darwin.fchmod(lockFD, S_IRUSR | S_IWUSR)
+    defer {
+      Darwin.flock(lockFD, LOCK_UN)
+      Darwin.close(lockFD)
+    }
+    guard Darwin.flock(lockFD, LOCK_EX) == 0 else { return }
+    #endif
 
     let existingSize = (try? queueURL.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
     guard Int64(existingSize) + Int64(data.count) <= maximumQueueBytes else { return }
@@ -236,8 +245,13 @@ enum AgentUsageTelemetry {
     )
     #endif
     guard queueFD >= 0 else { return }
-    defer { close(queueFD) }
-    fchmod(queueFD, S_IRUSR | S_IWUSR)
+    #if os(Linux)
+    defer { Glibc.close(queueFD) }
+    Glibc.fchmod(queueFD, S_IRUSR | S_IWUSR)
+    #else
+    defer { Darwin.close(queueFD) }
+    Darwin.fchmod(queueFD, S_IRUSR | S_IWUSR)
+    #endif
 
     data.withUnsafeBytes { bytes in
       guard let baseAddress = bytes.baseAddress else { return }

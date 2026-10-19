@@ -62,12 +62,33 @@ thin_mach_o_to_match_app_arch() {
 
   local original_mode
   original_mode=$(stat -f '%Lp' "${binary_path}" 2>/dev/null || echo 755)
-  local thin_out
-  thin_out="$(mktemp "${TMPDIR:-/tmp}/$(basename "${binary_path}").${thin_arch}.XXXXXX")"
+  local binary_dir thin_out
+  binary_dir=$(dirname "${binary_path}")
+  thin_out="$(mktemp "${binary_dir}/.$(basename "${binary_path}").${thin_arch}.XXXXXX")"
   chmod "${original_mode}" "${thin_out}" 2>/dev/null || chmod 755 "${thin_out}"
   lipo -thin "${thin_arch}" "${binary_path}" -output "${thin_out}"
   mv -f "${thin_out}" "${binary_path}"
   chmod "${original_mode}" "${binary_path}" 2>/dev/null || chmod 755 "${binary_path}"
+}
+
+# Fail the release if a single-arch app still ships a fat or mismatched helper.
+assert_mach_o_archs_match_app() {
+  local reference_exec="$1"
+  shift
+  [[ -f "${reference_exec}" ]] || return 0
+  local app_archs
+  app_archs=$(lipo -archs "${reference_exec}" 2>/dev/null) || return 0
+  [[ "${app_archs}" != *" "* ]] || return 0
+
+  local path path_archs
+  for path in "$@"; do
+    [[ -f "${path}" ]] || continue
+    path_archs=$(lipo -archs "${path}" 2>/dev/null) || continue
+    if [[ "${path_archs}" != "${app_archs}" ]]; then
+      echo "ERROR: ${path} has architectures (${path_archs}); expected (${app_archs}) to match ${reference_exec}" >&2
+      exit 1
+    fi
+  done
 }
 # Work in a non-iCloud temporary directory to avoid fileprovider xattrs
 SANITIZED_DIR=${SANITIZED_DIR:-$(mktemp -d -t dayflow_sign)}
@@ -154,6 +175,13 @@ if [[ -f "${CLI_BINARY}" ]]; then
   thin_mach_o_to_match_app_arch "${CLI_BINARY}" "${MAIN_EXEC}"
 fi
 
+SPARKLE_DIR="${SANITIZED_APP}/Contents/Frameworks/Sparkle.framework/Versions/B"
+AUTOUPDATE="${SPARKLE_DIR}/Autoupdate"
+if [[ -f "${AUTOUPDATE}" ]]; then
+  thin_mach_o_to_match_app_arch "${AUTOUPDATE}" "${MAIN_EXEC}"
+fi
+assert_mach_o_archs_match_app "${MAIN_EXEC}" "${CLI_BINARY}" "${AUTOUPDATE}"
+
 echo "[5/8] Codesigning (no --deep, proper Sparkle helpers)…"
 # Ensure any stray metadata is gone
 rm -f "${SANITIZED_APP}"/Icon? 2>/dev/null || true
@@ -163,7 +191,6 @@ if command -v xattr >/dev/null 2>&1; then
 fi
 
 # Re-sign Sparkle helpers first per Sparkle sandboxing guide
-SPARKLE_DIR="${SANITIZED_APP}/Contents/Frameworks/Sparkle.framework/Versions/B"
 if [[ -d "${SPARKLE_DIR}" ]]; then
   if [[ -d "${SPARKLE_DIR}/XPCServices/Installer.xpc" ]]; then
     codesign -vvv --force -o runtime --sign "${SIGN_ID}" \
@@ -174,10 +201,9 @@ if [[ -d "${SPARKLE_DIR}" ]]; then
     codesign -vvv --force -o runtime --preserve-metadata=entitlements --sign "${SIGN_ID}" \
       "${SPARKLE_DIR}/XPCServices/Downloader.xpc"
   fi
-  if [[ -f "${SPARKLE_DIR}/Autoupdate" ]]; then
-    thin_mach_o_to_match_app_arch "${SPARKLE_DIR}/Autoupdate" "${MAIN_EXEC}"
+  if [[ -f "${AUTOUPDATE}" ]]; then
     codesign -vvv --force -o runtime --sign "${SIGN_ID}" \
-      "${SPARKLE_DIR}/Autoupdate"
+      "${AUTOUPDATE}"
   fi
   if [[ -d "${SPARKLE_DIR}/Updater.app" ]]; then
     codesign -vvv --force -o runtime --sign "${SIGN_ID}" \

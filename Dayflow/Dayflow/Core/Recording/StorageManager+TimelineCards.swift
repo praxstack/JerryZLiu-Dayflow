@@ -940,6 +940,18 @@ extension StorageManager {
                  AND \(TimelineCardReplacementPolicy.retirementPredicateSQL)
           """, arguments: StatementArguments(retirementArgs))
 
+      let preservedArgs: [DatabaseValueConvertible] = [batchEndTs, toTs, fromTs, fromTs, toTs]
+      let preservedRows = try Row.fetchAll(
+        db,
+        sql: """
+              SELECT start_ts, end_ts FROM timeline_cards
+              WHERE \(TimelineCardReplacementPolicy.preservedNewerBatchOverlapSQL)
+          """, arguments: StatementArguments(preservedArgs))
+      let preservedRanges: [(startTs: Int, endTs: Int)] = preservedRows.compactMap { row in
+        guard let start: Int = row["start_ts"], let end: Int = row["end_ts"] else { return nil }
+        return (start, end)
+      }
+
       // Insert new cards
       for card in newCards {
         // Encode metadata object with distractions and appSites
@@ -999,10 +1011,29 @@ extension StorageManager {
           endDate = calendar.date(byAdding: .day, value: 1, to: endDate) ?? endDate
         }
 
-        let endTs = Int(endDate.timeIntervalSince1970)
+        var insertStartTs = startTs
+        var insertEndTs = Int(endDate.timeIntervalSince1970)
+
+        guard
+          let clipped = TimelineCardReplacementPolicy.clipInsertTimestamps(
+            startTs: insertStartTs, endTs: insertEndTs, preserved: preservedRanges)
+        else {
+          continue
+        }
+        insertStartTs = clipped.startTs
+        insertEndTs = clipped.endTs
+        if clipped.startTs != startTs {
+          startDate = Date(timeIntervalSince1970: TimeInterval(clipped.startTs))
+        }
+        if clipped.endTs != Int(endDate.timeIntervalSince1970) {
+          endDate = Date(timeIntervalSince1970: TimeInterval(clipped.endTs))
+        }
 
         // Calculate the day string using 4 AM boundary rules
         let (dayString, _, _) = startDate.getDayInfoFor4AMBoundary()
+
+        let startClock = timeFormatter.string(from: startDate)
+        let endClock = timeFormatter.string(from: endDate)
 
         try db.execute(
           sql: """
@@ -1013,7 +1044,7 @@ extension StorageManager {
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
           arguments: [
-            batchId, card.startTimestamp, card.endTimestamp, startTs, endTs, dayString, card.title,
+            batchId, startClock, endClock, insertStartTs, insertEndTs, dayString, card.title,
             card.summary, card.category, card.subcategory, card.detailedSummary, metadataString,
           ])
 

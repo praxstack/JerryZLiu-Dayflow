@@ -69,6 +69,20 @@ final class TimelineCardReplacementPolicyTests: XCTestCase {
     XCTAssertTrue(try isDeleted(cardId: 1))
   }
 
+  func testClipInsertTimestampsBeforePreservedNewerBatchCard() {
+    let preserved = [(startTs: 23_400_0, endTs: 23_550_0)]
+    let clipped = TimelineCardReplacementPolicy.clipInsertTimestamps(
+      startTs: 23_250_0, endTs: 23_405_3, preserved: preserved)
+    XCTAssertEqual(clipped?.endTs, 23_400_0)
+  }
+
+  func testClipInsertTimestampsSkipsWhenFullyOwnedByNewerBatch() {
+    let preserved = [(startTs: 23_400_0, endTs: 23_550_0)]
+    XCTAssertNil(
+      TimelineCardReplacementPolicy.clipInsertTimestamps(
+        startTs: 23_410_0, endTs: 23_500_0, preserved: preserved))
+  }
+
   func testPreservesSystemCardFromAnotherBatch() throws {
     try insertBatch(id: 1, start: 1000, end: 2000)
     try insertBatch(id: 2, start: 2000, end: 3000)

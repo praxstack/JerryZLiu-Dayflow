@@ -85,57 +85,10 @@ if [[ "$bad_date_status" -ne 2 ]]; then
   exit 1
 fi
 
+echo "[verify] MCP helper self-test"
+python3 "$ROOT/scripts/mcp_verify_helpers.py" --self-test
+
 echo "[verify] MCP initialize"
-python3 - "$DAYFLOW_BIN" <<'PY'
-import json, subprocess, sys, select, time
-
-binary = sys.argv[1]
-proc = subprocess.Popen(
-    [binary, "mcp"],
-    stdin=subprocess.PIPE,
-    stdout=subprocess.PIPE,
-    stderr=subprocess.DEVNULL,
-)
-assert proc.stdin is not None and proc.stdout is not None
-request = {
-    "jsonrpc": "2.0",
-    "id": 1,
-    "method": "initialize",
-    "params": {
-        "protocolVersion": "2025-06-18",
-        "capabilities": {},
-        "clientInfo": {"name": "verify", "version": "0"},
-    },
-}
-proc.stdin.write((json.dumps(request) + "\n").encode())
-proc.stdin.flush()
-
-
-def readline_deadline(stream, deadline: float) -> bytes:
-    while time.monotonic() < deadline:
-        remaining = deadline - time.monotonic()
-        ready, _, _ = select.select([stream], [], [], max(0.0, remaining))
-        if not ready:
-            break
-        line = stream.readline()
-        if line:
-            return line
-        break
-    raise SystemExit("MCP initialize timed out")
-
-
-deadline = time.monotonic() + 5
-line = readline_deadline(proc.stdout, deadline)
-proc.kill()
-payload = json.loads(line.decode())
-if payload.get("jsonrpc") != "2.0":
-    raise SystemExit(f"unexpected MCP jsonrpc: {payload}")
-if payload.get("id") != 1:
-    raise SystemExit(f"unexpected MCP id: {payload}")
-name = payload.get("result", {}).get("serverInfo", {}).get("name")
-if name != "dayflow":
-    raise SystemExit(f"unexpected MCP serverInfo.name: {name!r}")
-print("MCP initialize ok")
-PY
+python3 "$ROOT/scripts/mcp_verify_helpers.py" "$DAYFLOW_BIN"
 
 echo "[verify] All checks passed."

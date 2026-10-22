@@ -39,6 +39,57 @@ VOL_NAME=${VOL_NAME:-$APP_NAME}
 DMG_NAME=${DMG_NAME:-"${APP_NAME}.dmg"}
 
 APP_PATH="${DERIVED_DATA}/Build/Products/${CONFIG}/${APP_NAME}.app"
+# Dayflow DMG releases target Apple Silicon; override with RELEASE_ARCHS="arm64 x86_64" for universal.
+RELEASE_ARCHS=${RELEASE_ARCHS:-arm64}
+
+# Drop an unused slice from a fat helper when the reference executable is single-arch.
+thin_mach_o_to_match_app_arch() {
+  local binary_path="$1"
+  local reference_exec="$2"
+  [[ -f "${binary_path}" && -f "${reference_exec}" ]] || return 0
+  local app_archs binary_archs
+  app_archs=$(lipo -archs "${reference_exec}" 2>/dev/null) || return 0
+  binary_archs=$(lipo -archs "${binary_path}" 2>/dev/null) || return 0
+
+  local thin_arch=""
+  if [[ "${app_archs}" == "arm64" && "${binary_archs}" == *" "* && "${binary_archs}" == *x86_64* ]]; then
+    thin_arch=arm64
+  elif [[ "${app_archs}" == "x86_64" && "${binary_archs}" == *" "* && "${binary_archs}" == *arm64* ]]; then
+    thin_arch=x86_64
+  else
+    return 0
+  fi
+
+  local original_mode
+  original_mode=$(stat -f '%Lp' "${binary_path}" 2>/dev/null || echo 755)
+  local binary_dir thin_out
+  binary_dir=$(dirname "${binary_path}")
+  thin_out="$(mktemp "${binary_dir}/.$(basename "${binary_path}").${thin_arch}.XXXXXX")"
+  chmod "${original_mode}" "${thin_out}" 2>/dev/null || chmod 755 "${thin_out}"
+  lipo -thin "${thin_arch}" "${binary_path}" -output "${thin_out}"
+  mv -f "${thin_out}" "${binary_path}"
+  chmod "${original_mode}" "${binary_path}" 2>/dev/null || chmod 755 "${binary_path}"
+}
+
+# Fail the release if a single-arch app still ships a fat or mismatched helper.
+assert_mach_o_archs_match_app() {
+  local reference_exec="$1"
+  shift
+  [[ -f "${reference_exec}" ]] || return 0
+  local app_archs
+  app_archs=$(lipo -archs "${reference_exec}" 2>/dev/null) || return 0
+  [[ "${app_archs}" != *" "* ]] || return 0
+
+  local path path_archs
+  for path in "$@"; do
+    [[ -f "${path}" ]] || continue
+    path_archs=$(lipo -archs "${path}" 2>/dev/null) || continue
+    if [[ "${path_archs}" != "${app_archs}" ]]; then
+      echo "ERROR: ${path} has architectures (${path_archs}); expected (${app_archs}) to match ${reference_exec}" >&2
+      exit 1
+    fi
+  done
+}
 # Work in a non-iCloud temporary directory to avoid fileprovider xattrs
 SANITIZED_DIR=${SANITIZED_DIR:-$(mktemp -d -t dayflow_sign)}
 trap 'rm -rf "${SANITIZED_DIR}"' EXIT
@@ -60,6 +111,7 @@ xcodebuild \
   CODE_SIGN_IDENTITY="" \
   CODE_SIGNING_REQUIRED=NO \
   CODE_SIGNING_ALLOWED=NO \
+  ARCHS="${RELEASE_ARCHS}" \
   build
 
 if [[ ! -d "${APP_PATH}" ]]; then
@@ -117,6 +169,19 @@ mkdir -p "${SANITIZED_DIR}"
 # Copy without extended attributes or resource forks
 ditto --noextattr --norsrc "${APP_PATH}" "${SANITIZED_APP}"
 
+MAIN_EXEC="${SANITIZED_APP}/Contents/MacOS/${APP_NAME}"
+CLI_BINARY="${SANITIZED_APP}/Contents/Helpers/dayflow"
+if [[ -f "${CLI_BINARY}" ]]; then
+  thin_mach_o_to_match_app_arch "${CLI_BINARY}" "${MAIN_EXEC}"
+fi
+
+SPARKLE_DIR="${SANITIZED_APP}/Contents/Frameworks/Sparkle.framework/Versions/B"
+AUTOUPDATE="${SPARKLE_DIR}/Autoupdate"
+if [[ -f "${AUTOUPDATE}" ]]; then
+  thin_mach_o_to_match_app_arch "${AUTOUPDATE}" "${MAIN_EXEC}"
+fi
+assert_mach_o_archs_match_app "${MAIN_EXEC}" "${CLI_BINARY}" "${AUTOUPDATE}"
+
 echo "[5/8] Codesigning (no --deep, proper Sparkle helpers)…"
 # Ensure any stray metadata is gone
 rm -f "${SANITIZED_APP}"/Icon? 2>/dev/null || true
@@ -126,7 +191,6 @@ if command -v xattr >/dev/null 2>&1; then
 fi
 
 # Re-sign Sparkle helpers first per Sparkle sandboxing guide
-SPARKLE_DIR="${SANITIZED_APP}/Contents/Frameworks/Sparkle.framework/Versions/B"
 if [[ -d "${SPARKLE_DIR}" ]]; then
   if [[ -d "${SPARKLE_DIR}/XPCServices/Installer.xpc" ]]; then
     codesign -vvv --force -o runtime --sign "${SIGN_ID}" \
@@ -137,9 +201,9 @@ if [[ -d "${SPARKLE_DIR}" ]]; then
     codesign -vvv --force -o runtime --preserve-metadata=entitlements --sign "${SIGN_ID}" \
       "${SPARKLE_DIR}/XPCServices/Downloader.xpc"
   fi
-  if [[ -f "${SPARKLE_DIR}/Autoupdate" ]]; then
+  if [[ -f "${AUTOUPDATE}" ]]; then
     codesign -vvv --force -o runtime --sign "${SIGN_ID}" \
-      "${SPARKLE_DIR}/Autoupdate"
+      "${AUTOUPDATE}"
   fi
   if [[ -d "${SPARKLE_DIR}/Updater.app" ]]; then
     codesign -vvv --force -o runtime --sign "${SIGN_ID}" \
@@ -203,7 +267,6 @@ fi
 
 # Sign the bundled dayflow CLI before the app container seals over it.
 # It's a plain hardened-runtime binary with no entitlements of its own.
-CLI_BINARY="${SANITIZED_APP}/Contents/Helpers/dayflow"
 if [[ -f "${CLI_BINARY}" ]]; then
   codesign -vvv --force -o runtime --timestamp --sign "${SIGN_ID}" "${CLI_BINARY}"
 else

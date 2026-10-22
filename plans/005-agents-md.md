@@ -17,6 +17,7 @@
 - **Depends on**: none
 - **Category**: dx
 - **Planned at**: commit `274c059`, 2026-08-29
+- **In PR**: [#6](https://github.com/praxstack/JerryZLiu-Dayflow/pull/6) on `prax/agents-md-6fc7`
 
 ## Why this matters
 

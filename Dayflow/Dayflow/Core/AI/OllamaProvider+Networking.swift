@@ -6,11 +6,55 @@
 import Foundation
 
 extension OllamaProvider {
+  /// Default output cap kept low because long generations are slow on local hardware.
+  static let defaultMaxOutputTokens = 4000
+
+  /// Historical OpenAI-compatible default before the shared override existed.
+  static let openAICompatibleDefaultMaxOutputTokens = 8000
+
+  static let minPersistedMaxOutputTokens = 256
+  static let maxPersistedMaxOutputTokens = 128_000
+
+  /// Override for reasoning models that need more headroom (JerryZLiu/Dayflow#246).
+  /// Settings > Providers reads and writes this key; `defaults write` still works:
+  /// `defaults write teleportlabs.com.Dayflow llmLocalMaxOutputTokens -int 32000`
+  static let maxOutputTokensDefaultsKey = "llmLocalMaxOutputTokens"
+
+  static func storedMaxOutputTokensOverride(from defaults: UserDefaults = .standard) -> Int? {
+    let configured = defaults.integer(forKey: maxOutputTokensDefaultsKey)
+    guard configured > 0 else { return nil }
+    return min(max(configured, minPersistedMaxOutputTokens), maxPersistedMaxOutputTokens)
+  }
+
+  static func persistMaxOutputTokens(_ value: Int?, to defaults: UserDefaults = .standard) {
+    guard let value else {
+      defaults.removeObject(forKey: maxOutputTokensDefaultsKey)
+      return
+    }
+    guard value > 0 else {
+      defaults.removeObject(forKey: maxOutputTokensDefaultsKey)
+      return
+    }
+    let clamped = min(max(value, minPersistedMaxOutputTokens), maxPersistedMaxOutputTokens)
+    defaults.set(clamped, forKey: maxOutputTokensDefaultsKey)
+  }
+
+  static func resolvedMaxOutputTokens(
+    from defaults: UserDefaults = .standard,
+    fallback: Int = defaultMaxOutputTokens
+  ) -> Int {
+    storedMaxOutputTokensOverride(from: defaults) ?? fallback
+  }
+
+  static var configuredMaxOutputTokens: Int {
+    resolvedMaxOutputTokens()
+  }
+
   struct ChatRequest: Codable {
     let model: String
     let messages: [ChatMessage]
     var temperature: Double = 0.7
-    var max_tokens: Int = 4000
+    var max_tokens: Int = OllamaProvider.resolvedMaxOutputTokens()
     var stream: Bool = false
     var reasoning: Reasoning? = nil
 
@@ -254,7 +298,7 @@ extension OllamaProvider {
   // Helper method for text-only requests
   func callTextAPI(
     _ prompt: String, operation: String, expectJSON: Bool = false, batchId: Int64? = nil,
-    maxRetries: Int = 3, maxTokens: Int = 4000
+    maxRetries: Int = 3, maxTokens: Int = OllamaProvider.resolvedMaxOutputTokens()
   ) async throws -> String {
     let systemPrompt =
       expectJSON
@@ -290,7 +334,8 @@ extension OllamaProvider {
 // MARK: - Text Generation
 
 extension OllamaProvider {
-  func generateText(prompt: String, maxTokens: Int = 4000) async throws
+  func generateText(prompt: String, maxTokens: Int = OllamaProvider.resolvedMaxOutputTokens())
+    async throws
     -> (text: String, log: LLMCall)
   {
     let callStart = Date()

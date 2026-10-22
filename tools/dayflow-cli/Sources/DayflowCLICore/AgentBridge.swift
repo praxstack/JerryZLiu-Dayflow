@@ -1,5 +1,5 @@
 //
-//  Bridge.swift
+//  AgentBridge.swift
 //  dayflow-cli
 //
 //  Client side of the write channel. Reads go straight to SQLite; writes go
@@ -11,6 +11,9 @@
 //  connection closes. {"protocol_version":1,"operation":...,"arguments":{...}}
 //  → {"ok":true,"data":{...}} or {"ok":false,"error":{"code","message"}}.
 //
+//  Tests inject DAYFLOW_SOCK and DAYFLOW_EDITS_ENABLED so CI never talks to a
+//  live Dayflow.app.
+//
 
 import Foundation
 #if os(Linux)
@@ -19,31 +22,48 @@ import Glibc
 import Darwin
 #endif
 
-enum AgentBridge {
-  static let protocolVersion = 1
+public enum AgentBridge {
+  public static let protocolVersion = AgentBridgeProtocol.version
 
-  static var socketPath: String {
+  public static let editsEnabledEnvironmentKey = "DAYFLOW_EDITS_ENABLED"
+  public static let socketPathEnvironmentKey = "DAYFLOW_SOCK"
+
+  public static var socketPath: String {
+    if let override = ProcessInfo.processInfo.environment[socketPathEnvironmentKey],
+      !override.isEmpty
+    {
+      return override
+    }
     let appSupport = FileManager.default.urls(
       for: .applicationSupportDirectory, in: .userDomainMask)[0]
     return appSupport.appendingPathComponent("Dayflow/agent.sock").path
   }
 
-  static var editsEnabled: Bool {
-    UserDefaults(suiteName: "teleportlabs.com.Dayflow")?
+  public static var editsEnabled: Bool {
+    if let env = ProcessInfo.processInfo.environment[editsEnabledEnvironmentKey] {
+      let normalized = env.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+      return normalized == "1" || normalized == "true" || normalized == "yes"
+    }
+    return UserDefaults(suiteName: "teleportlabs.com.Dayflow")?
       .bool(forKey: "agentEditsEnabled") ?? false
   }
 
-  static var appIsListening: Bool {
+  public static var appIsListening: Bool {
     FileManager.default.fileExists(atPath: socketPath)
   }
 
-  struct BridgeError: Error {
-    let code: String
-    let message: String
+  public struct BridgeError: Error, Equatable {
+    public let code: String
+    public let message: String
+
+    public init(code: String, message: String) {
+      self.code = code
+      self.message = message
+    }
   }
 
   /// Send one operation to the app and return its `data` payload.
-  static func send(operation: String, arguments: [String: Any]) throws -> [String: Any] {
+  public static func send(operation: String, arguments: [String: Any]) throws -> [String: Any] {
     #if os(Linux)
     let fd = socket(AF_UNIX, Int32(SOCK_STREAM.rawValue), 0)
     #else
@@ -77,18 +97,12 @@ enum AgentBridge {
         message: "Dayflow isn't running. Reads work offline; edits need the app open.")
     }
 
-    let request: [String: Any] = [
-      "protocol_version": protocolVersion,
-      "operation": operation,
-      "arguments": arguments,
-    ]
-    var payload = try JSONSerialization.data(withJSONObject: request)
-    payload.append(0x0A)
+    let payload = try AgentBridgeProtocol.encodeRequest(
+      operation: operation, arguments: arguments)
     payload.withUnsafeBytes { buffer in
       _ = write(fd, buffer.baseAddress, buffer.count)
     }
 
-    // Read until newline or EOF.
     var response = Data()
     var byte: UInt8 = 0
     while read(fd, &byte, 1) == 1 {
@@ -99,19 +113,6 @@ enum AgentBridge {
       }
     }
 
-    guard
-      let object = try? JSONSerialization.jsonObject(with: response) as? [String: Any]
-    else {
-      throw BridgeError(code: "protocol_error", message: "Unreadable response from Dayflow.")
-    }
-
-    if object["ok"] as? Bool == true {
-      return object["data"] as? [String: Any] ?? [:]
-    }
-    let errorInfo = object["error"] as? [String: Any]
-    throw BridgeError(
-      code: errorInfo?["code"] as? String ?? "unknown",
-      message: errorInfo?["message"] as? String ?? "Dayflow reported an error."
-    )
+    return try AgentBridgeProtocol.decodeResponse(response)
   }
 }

@@ -1,0 +1,57 @@
+name: dayflow-cli
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "tools/dayflow-cli/**"
+      - ".github/workflows/cli.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "tools/dayflow-cli/**"
+      - ".github/workflows/cli.yml"
+
+# swift-actions/setup-swift@v2 catalogs through 6.2.1 and rejects 6.3.3
+# ("Version 6.3.3 is not available"). Install 6.3.3 with Swiftly so this job
+# matches .cursor/Dockerfile and scripts/cloud-agent-verify.sh.
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    env:
+      SWIFT_VERSION: "6.3.3"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install SQLite and Swift toolchain deps
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libsqlite3-dev sqlite3 libcurl4-openssl-dev
+      - name: Install Swift ${{ env.SWIFT_VERSION }} via Swiftly
+        run: |
+          set -euo pipefail
+          export SWIFTLY_HOME_DIR="${HOME}/.local/share/swiftly"
+          export SWIFTLY_BIN_DIR="${SWIFTLY_HOME_DIR}/bin"
+          export SWIFTLY_TOOLCHAINS_DIR="${SWIFTLY_HOME_DIR}/toolchains"
+          curl -fsSL "https://download.swift.org/swiftly/linux/swiftly-$(uname -m).tar.gz" \
+            | tar xz -C /tmp
+          /tmp/swiftly init --no-modify-profile --skip-install --assume-yes
+          "$SWIFTLY_BIN_DIR/swiftly" install --use "$SWIFT_VERSION"
+          {
+            echo "SWIFTLY_HOME_DIR=${SWIFTLY_HOME_DIR}"
+            echo "SWIFTLY_BIN_DIR=${SWIFTLY_BIN_DIR}"
+            echo "SWIFTLY_TOOLCHAINS_DIR=${SWIFTLY_TOOLCHAINS_DIR}"
+          } >> "$GITHUB_ENV"
+          echo "${SWIFTLY_BIN_DIR}" >> "$GITHUB_PATH"
+          echo "${SWIFTLY_TOOLCHAINS_DIR}/${SWIFT_VERSION}/usr/bin" >> "$GITHUB_PATH"
+      - name: Confirm Swift ${{ env.SWIFT_VERSION }}
+        run: |
+          set -euo pipefail
+          swift --version
+          swift --version | grep -F "$SWIFT_VERSION"
+      - name: Swift tests
+        run: swift test --package-path tools/dayflow-cli
+      - name: Build CLI
+        run: swift build --package-path tools/dayflow-cli
+      - name: Fixture + subprocess tests
+        run: |
+          bash tools/dayflow-cli/fixtures/create_fixture_db.sh
+          DAYFLOW_BIN="$(swift build --package-path tools/dayflow-cli --show-bin-path)/dayflow" \
+            python3 tools/dayflow-cli/tests/test_cli.py

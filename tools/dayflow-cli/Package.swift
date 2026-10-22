@@ -9,29 +9,41 @@ import PackageDescription
 // alone and can later be folded into Dayflow.app as an Xcode target without
 // dragging any package resolution along with it.
 #if os(Linux)
-let targets: [Target] = [
+let sqliteDependency: [Target.Dependency] = ["CSQLite"]
+let sqliteTargets: [Target] = [
   .systemLibrary(
     name: "CSQLite",
     pkgConfig: "sqlite3",
     providers: [.apt(["libsqlite3-dev"]), .yum(["sqlite-devel"])]
-  ),
-  .executableTarget(
-    name: "dayflow",
-    dependencies: ["CSQLite"],
-    path: "Sources/dayflow"
-  ),
+  )
 ]
 #else
-let targets: [Target] = [
-  .executableTarget(
-    name: "dayflow",
-    path: "Sources/dayflow"
-  ),
-]
+let sqliteDependency: [Target.Dependency] = []
+let sqliteTargets: [Target] = []
 #endif
 
 let package = Package(
   name: "dayflow-cli",
   platforms: [.macOS(.v13)],
-  targets: targets
+  products: [
+    .executable(name: "dayflow", targets: ["dayflow"]),
+    .library(name: "DayflowCLICore", targets: ["DayflowCLICore"]),
+  ],
+  targets: sqliteTargets + [
+    .target(
+      name: "DayflowCLICore",
+      dependencies: sqliteDependency,
+      path: "Sources/DayflowCLICore"
+    ),
+    .executableTarget(
+      name: "dayflow",
+      dependencies: ["DayflowCLICore"] + sqliteDependency,
+      path: "Sources/dayflow"
+    ),
+    .testTarget(
+      name: "DayflowCLICoreTests",
+      dependencies: ["DayflowCLICore"],
+      path: "Tests/DayflowCLICoreTests"
+    ),
+  ]
 )

@@ -18,43 +18,43 @@ import SQLite3
 // express directly because it's a C macro casting -1 to a function pointer.
 private let sqliteTransient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
 
-enum DatabaseError: Error {
+public enum DatabaseError: Error {
   case notFound(String)
   case cannotOpen(String)
   case queryFailed(String)
 }
 
 /// A single row, keyed by column name.
-struct SQLRow {
+public struct SQLRow {
   private let values: [String: SQLValue]
 
-  init(values: [String: SQLValue]) {
+  public init(values: [String: SQLValue]) {
     self.values = values
   }
 
-  func int(_ column: String) -> Int? {
+  public func int(_ column: String) -> Int? {
     if case .integer(let v)? = values[column] { return Int(v) }
     return nil
   }
 
-  func string(_ column: String) -> String? {
+  public func string(_ column: String) -> String? {
     if case .text(let v)? = values[column] { return v }
     return nil
   }
 }
 
-enum SQLValue {
+public enum SQLValue {
   case integer(Int64)
   case real(Double)
   case text(String)
   case null
 }
 
-final class Database {
+public final class Database {
   private let handle: OpaquePointer
 
   /// Dayflow's database location. Overridable via DAYFLOW_DB for tests.
-  static func defaultPath() -> String {
+  public static func defaultPath() -> String {
     if let override = ProcessInfo.processInfo.environment["DAYFLOW_DB"] {
       return override
     }
@@ -63,7 +63,7 @@ final class Database {
     return appSupport.appendingPathComponent("Dayflow/chunks.sqlite").path
   }
 
-  init(path: String) throws {
+  public init(path: String) throws {
     guard FileManager.default.fileExists(atPath: path) else {
       throw DatabaseError.notFound(path)
     }
@@ -89,7 +89,7 @@ final class Database {
     sqlite3_close(handle)
   }
 
-  func query(_ sql: String, _ bindings: [SQLValue] = []) throws -> [SQLRow] {
+  public func query(_ sql: String, _ bindings: [SQLValue] = []) throws -> [SQLRow] {
     var statement: OpaquePointer?
     guard sqlite3_prepare_v2(handle, sql, -1, &statement, nil) == SQLITE_OK, let statement else {
       throw DatabaseError.queryFailed(String(cString: sqlite3_errmsg(handle)))

@@ -504,6 +504,32 @@ struct LLMProviderSetupView: View {
                     setupState.testSuccessful = false
                   }
 
+                  VStack(alignment: .leading, spacing: 6) {
+                    Text("Max images per request")
+                      .font(.custom("Figtree", size: 12))
+                      .fontWeight(.semibold)
+                      .foregroundColor(SettingsStyle.secondary)
+                    Stepper(
+                      value: $setupState.openAICompatibleMaxImages,
+                      in: OpenAICompatibleScreenshotBudget.minimumLimit...OpenAICompatibleScreenshotBudget
+                        .maximumLimit
+                    ) {
+                      Text("\(setupState.openAICompatibleMaxImages)")
+                        .font(.custom("Figtree", size: 13))
+                        .frame(minWidth: 28, alignment: .leading)
+                    }
+                    .onChange(of: setupState.openAICompatibleMaxImages) {
+                      setupState.hasTestedConnection = false
+                      setupState.testSuccessful = false
+                    }
+                    Text(
+                      "Some gateways allow fewer than 15 images per request. Dayflow samples each batch down to this limit (1–15). The connection test sends that many images."
+                    )
+                    .font(.custom("Figtree", size: 11))
+                    .foregroundColor(SettingsStyle.meta)
+                    .fixedSize(horizontal: false, vertical: true)
+                  }
+
                   LocalLLMTestView(
                     baseURL: $setupState.openAICompatibleBaseURL,
                     modelId: $setupState.openAICompatibleModelID,
@@ -519,6 +545,7 @@ struct LLMProviderSetupView: View {
                       ),
                     requiresMeaningfulResponse: true,
                     enforcesLocalLatencyLimit: false,
+                    visionImageProbeCount: setupState.openAICompatibleMaxImages,
                     onTestComplete: { success in
                       setupState.hasTestedConnection = true
                       setupState.testSuccessful = success
@@ -783,9 +810,11 @@ struct LLMProviderSetupView: View {
     let configuration = OpenAICompatibleConfiguration(
       preset: setupState.openAICompatiblePreset,
       baseURL: setupState.openAICompatibleBaseURL,
-      modelID: setupState.openAICompatibleModelID
+      modelID: setupState.openAICompatibleModelID,
+      maxImagesPerRequest: setupState.openAICompatibleMaxImages
     )
     guard configuration.isComplete else { return false }
+    setupState.openAICompatibleMaxImages = configuration.maxImagesPerRequest
 
     let key = setupState.openAICompatibleAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
     let previousKey = KeychainManager.shared.retrieve(

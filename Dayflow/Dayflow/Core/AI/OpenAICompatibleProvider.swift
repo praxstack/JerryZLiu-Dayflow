@@ -99,11 +99,8 @@ final class OpenAICompatibleProvider: ChatGPTTimelinePromptSupporting {
     guard let first = sorted.first, let last = sorted.last else {
       throw invalidOutput("No screenshots to transcribe.")
     }
-    // Include both endpoints and cap the request at 15 images.
-    let count = min(15, sorted.count)
-    let selected = (0..<count).map { index in
-      sorted[count == 1 ? 0 : index * (sorted.count - 1) / (count - 1)]
-    }
+    let selected = OpenAICompatibleScreenshotBudget.select(
+      sorted, limit: configuration.maxImagesPerRequest)
     let duration = max(1, TimeInterval(last.capturedAt - first.capturedAt))
     var images: [MessageContent] = []
     var validFrameCount = 0

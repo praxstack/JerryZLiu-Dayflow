@@ -67,6 +67,8 @@ struct LocalLLMTestView: View {
   let credentialStorageDescription: String
   let requiresMeaningfulResponse: Bool
   let enforcesLocalLatencyLimit: Bool
+  /// When set, the probe attaches this many images (clamped 1–15) to catch gateway image caps.
+  let visionImageProbeCount: Int?
   let onTestComplete: (Bool) -> Void
 
   init(
@@ -84,6 +86,7 @@ struct LocalLLMTestView: View {
       ),
     requiresMeaningfulResponse: Bool = false,
     enforcesLocalLatencyLimit: Bool = true,
+    visionImageProbeCount: Int? = nil,
     onTestComplete: @escaping (Bool) -> Void
   ) {
     _baseURL = baseURL
@@ -97,6 +100,7 @@ struct LocalLLMTestView: View {
     self.credentialStorageDescription = credentialStorageDescription
     self.requiresMeaningfulResponse = requiresMeaningfulResponse
     self.enforcesLocalLatencyLimit = enforcesLocalLatencyLimit
+    self.visionImageProbeCount = visionImageProbeCount
     self.onTestComplete = onTestComplete
   }
 
@@ -184,15 +188,18 @@ struct LocalLLMTestView: View {
       return
     }
 
+    let imageParts: [LocalLLMChatContent] = {
+      let count = OpenAICompatibleScreenshotBudget.setupVisionProbeImageCount(
+        configuredLimit: visionImageProbeCount)
+      return (0..<count).map { _ in .imageDataURL(LocalLLMTestConstants.blankImageDataURL) }
+    }()
+
     let payload = LocalLLMChatRequest(
       model: modelId,
       messages: [
         LocalLLMChatMessage(
           role: "user",
-          content: [
-            .text(LocalLLMTestConstants.prompt),
-            .imageDataURL(LocalLLMTestConstants.blankImageDataURL),
-          ]
+          content: [.text(LocalLLMTestConstants.prompt)] + imageParts
         )
       ],
       maxTokens: 10
@@ -255,8 +262,8 @@ struct LocalLLMTestView: View {
           self.isTesting = false
           self.onTestComplete(true)
         } else {
-          let body = String(data: data, encoding: .utf8) ?? ""
-          self.resultMessage = "HTTP \(http.statusCode): \(body)"
+          self.resultMessage = OpenAICompatibleHTTPErrorFormatter.userMessage(
+            statusCode: http.statusCode, body: data)
           self.isTesting = false
           self.onTestComplete(false)
         }

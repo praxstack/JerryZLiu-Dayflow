@@ -21,6 +21,7 @@ class ProviderSetupState: ObservableObject {
   @Published var openAICompatibleBaseURL: String = OpenAICompatibleConfiguration.openRouterBaseURL
   @Published var openAICompatibleModelID: String = ""
   @Published var openAICompatibleAPIKey: String = ""
+  @Published var openAICompatibleMaxImages: Int = OpenAICompatibleScreenshotBudget.defaultLimit
   // CLI detection
   @Published var codexCLIStatus: CLIDetectionState = .unknown
   @Published var claudeCLIStatus: CLIDetectionState = .unknown
@@ -64,6 +65,7 @@ class ProviderSetupState: ObservableObject {
       openAICompatiblePreset = configuration.preset
       openAICompatibleBaseURL = configuration.baseURL
       openAICompatibleModelID = configuration.modelID
+      openAICompatibleMaxImages = configuration.maxImagesPerRequest
     }
     openAICompatibleAPIKey =
       KeychainManager.shared.retrieve(for: OpenAICompatiblePreferences.keychainProvider) ?? ""

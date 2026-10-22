@@ -54,6 +54,8 @@ final class ProvidersSettingsViewModel: ObservableObject {
     OpenAICompatibleConfiguration.openRouterBaseURL
   @Published private(set) var openAICompatibleModelID = ""
   @Published private(set) var openAICompatibleAPIKey = ""
+  @Published private(set) var openAICompatibleMaxImagesPerRequest =
+    OpenAICompatibleScreenshotBudget.defaultLimit
   @Published private(set) var codexCLIInstalled = false
   @Published private(set) var claudeCLIInstalled = false
   @Published private(set) var isCheckingCLIReadiness = false
@@ -156,6 +158,7 @@ final class ProvidersSettingsViewModel: ObservableObject {
       openAICompatiblePreset = configuration.preset
       openAICompatibleBaseURL = configuration.baseURL
       openAICompatibleModelID = configuration.modelID
+      openAICompatibleMaxImagesPerRequest = configuration.maxImagesPerRequest
     }
     openAICompatibleAPIKey =
       KeychainManager.shared.retrieve(for: OpenAICompatiblePreferences.keychainProvider) ?? ""
@@ -231,6 +234,7 @@ final class ProvidersSettingsViewModel: ObservableObject {
     openAICompatiblePreset = configuration.preset
     openAICompatibleBaseURL = configuration.baseURL
     openAICompatibleModelID = configuration.modelID
+    openAICompatibleMaxImagesPerRequest = configuration.maxImagesPerRequest
     openAICompatibleAPIKey =
       KeychainManager.shared.retrieve(for: OpenAICompatiblePreferences.keychainProvider) ?? ""
   }

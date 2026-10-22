@@ -2,6 +2,10 @@ FROM ubuntu:24.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
+# Swift 6.3 Ubuntu 24.04 runtime packages from https://swift.org/install/linux/tarball/
+# plus ca-certificates/curl (image bootstrap), sqlite3/libsqlite3-dev (dayflow-cli),
+# and build-essential (C compiler for SwiftPM native targets).
+# ubuntu:24.04 already has an `ubuntu` user — do not useradd it or the image build fails.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
       ca-certificates \
@@ -11,15 +15,23 @@ RUN apt-get update \
       binutils \
       gnupg2 \
       unzip \
+      zip \
       pkg-config \
+      libc6-dev \
+      libcurl4-openssl-dev \
+      libedit2 \
+      libgcc-13-dev \
+      libncurses-dev \
+      libpython3-dev \
+      libsqlite3-0 \
       libsqlite3-dev \
+      libstdc++-13-dev \
+      libxml2-dev \
+      libz3-dev \
+      zlib1g-dev \
       sqlite3 \
       python3 \
-      libcurl4-openssl-dev \
-      libpython3-dev \
-      libxml2-dev \
-      libncurses-dev \
-      libz3-dev \
+      tzdata \
     && rm -rf /var/lib/apt/lists/*
 
 ENV SWIFTLY_HOME_DIR=/opt/swiftly
@@ -31,7 +43,6 @@ RUN curl -fsSL https://download.swift.org/swiftly/linux/swiftly-$(uname -m).tar.
       | tar xz -C /tmp \
     && /tmp/swiftly init --no-modify-profile --skip-install --assume-yes \
     && /opt/swiftly/bin/swiftly install --use 6.3.3 \
-    && rm -rf /tmp/swiftly
+    && rm -rf /tmp/swiftly /tmp/.swift-version /.swift-version
 
-RUN useradd -m -s /bin/bash ubuntu
 USER ubuntu

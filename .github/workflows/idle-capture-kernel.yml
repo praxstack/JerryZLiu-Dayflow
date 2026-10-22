@@ -1,0 +1,60 @@
+name: idle-capture-kernel
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "tools/idle-capture-kernel/**"
+      - "Dayflow/Dayflow/Core/Recording/ScreenRecorder.swift"
+      - "Dayflow/Dayflow/Views/UI/Settings/SettingsStorageTabView.swift"
+      - "Dayflow/Dayflow/Views/UI/Settings/StorageSettingsViewModel.swift"
+      - "Dayflow/DayflowTests/IdleCaptureThrottleAppTests.swift"
+      - ".github/workflows/idle-capture-kernel.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "tools/idle-capture-kernel/**"
+      - "Dayflow/Dayflow/Core/Recording/ScreenRecorder.swift"
+      - "Dayflow/Dayflow/Views/UI/Settings/SettingsStorageTabView.swift"
+      - "Dayflow/Dayflow/Views/UI/Settings/StorageSettingsViewModel.swift"
+      - "Dayflow/DayflowTests/IdleCaptureThrottleAppTests.swift"
+      - ".github/workflows/idle-capture-kernel.yml"
+
+# Linux characterization tests for the idle-capture kernel. macOS XCTest via
+# xcodebuild lives on the CI workflow (PR #5, macos-15). Do not add ubuntu
+# xcodebuild here.
+
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      SWIFT_VERSION: "6.3.3"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Swift toolchain deps
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libcurl4-openssl-dev
+      - name: Install Swift ${{ env.SWIFT_VERSION }} via Swiftly
+        run: |
+          set -euo pipefail
+          export SWIFTLY_HOME_DIR="${HOME}/.local/share/swiftly"
+          export SWIFTLY_BIN_DIR="${SWIFTLY_HOME_DIR}/bin"
+          export SWIFTLY_TOOLCHAINS_DIR="${SWIFTLY_HOME_DIR}/toolchains"
+          curl -fsSL "https://download.swift.org/swiftly/linux/swiftly-$(uname -m).tar.gz" \
+            | tar xz -C /tmp
+          /tmp/swiftly init --no-modify-profile --skip-install --assume-yes
+          "$SWIFTLY_BIN_DIR/swiftly" install --use "$SWIFT_VERSION"
+          {
+            echo "SWIFTLY_HOME_DIR=${SWIFTLY_HOME_DIR}"
+            echo "SWIFTLY_BIN_DIR=${SWIFTLY_BIN_DIR}"
+            echo "SWIFTLY_TOOLCHAINS_DIR=${SWIFTLY_TOOLCHAINS_DIR}"
+          } >> "$GITHUB_ENV"
+          echo "${SWIFTLY_BIN_DIR}" >> "$GITHUB_PATH"
+          echo "${SWIFTLY_TOOLCHAINS_DIR}/${SWIFT_VERSION}/usr/bin" >> "$GITHUB_PATH"
+      - name: Confirm Swift ${{ env.SWIFT_VERSION }}
+        run: |
+          set -euo pipefail
+          swift --version
+          swift --version | grep -F "$SWIFT_VERSION"
+      - name: Swift tests
+        run: swift test --package-path tools/idle-capture-kernel

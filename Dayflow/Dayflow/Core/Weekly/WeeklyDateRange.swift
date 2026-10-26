@@ -12,9 +12,8 @@ struct WeeklyDateRange: Equatable, Sendable {
   }()
 
   static func containing(_ date: Date, calendar: Calendar = Self.calendar) -> WeeklyDateRange {
-    let mondayAtFourAM = mondayBoundary(containing: date, calendar: calendar)
-    let weekEnd = calendar.date(byAdding: .day, value: 7, to: mondayAtFourAM) ?? mondayAtFourAM
-    return WeeklyDateRange(weekStart: mondayAtFourAM, weekEnd: weekEnd)
+    let window = DayflowCalendar.weekWindow(containing: date, calendar: calendar)
+    return WeeklyDateRange(weekStart: window.start, weekEnd: window.end)
   }
 
   func shifted(byWeeks weeks: Int, calendar: Calendar = Self.calendar) -> WeeklyDateRange {
@@ -34,25 +33,5 @@ struct WeeklyDateRange: Equatable, Sendable {
     return String(localized: "\(startText) - \(endText)")
   }
 
-  private static let calendar: Calendar = {
-    var calendar = Calendar(identifier: .gregorian)
-    calendar.timeZone = .autoupdatingCurrent
-    calendar.firstWeekday = 2
-    calendar.minimumDaysInFirstWeek = 4
-    return calendar
-  }()
-
-  private static func mondayBoundary(containing date: Date, calendar: Calendar) -> Date {
-    let baseWeekStart =
-      calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: date))
-      ?? date
-    let mondayAtFourAM =
-      calendar.date(bySettingHour: 4, minute: 0, second: 0, of: baseWeekStart) ?? baseWeekStart
-
-    if date < mondayAtFourAM {
-      return calendar.date(byAdding: .day, value: -7, to: mondayAtFourAM) ?? mondayAtFourAM
-    }
-
-    return mondayAtFourAM
-  }
+  private static let calendar: Calendar = DayflowCalendar.mondayGregorian()
 }

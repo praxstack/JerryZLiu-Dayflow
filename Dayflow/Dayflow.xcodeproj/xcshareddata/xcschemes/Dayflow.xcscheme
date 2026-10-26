@@ -21,6 +21,20 @@
                ReferencedContainer = "container:Dayflow.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "DFCA20042F9C0001000000B4"
+               BuildableName = "dayflow"
+               BlueprintName = "dayflow-cli"
+               ReferencedContainer = "container:Dayflow.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
       </BuildActionEntries>
    </BuildAction>
    <TestAction

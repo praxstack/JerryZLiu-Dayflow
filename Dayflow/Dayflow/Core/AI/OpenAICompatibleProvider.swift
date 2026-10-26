@@ -16,7 +16,11 @@ final class OpenAICompatibleProvider: ChatGPTTimelinePromptSupporting {
     self.completion = completion
   }
 
-  func makeRequest(content: [MessageContent]) -> ChatRequest {
+  func makeRequest(
+    content: [MessageContent],
+    maxTokens: Int = OllamaProvider.resolvedMaxOutputTokens(
+      fallback: OllamaProvider.openAICompatibleDefaultMaxOutputTokens)
+  ) -> ChatRequest {
     var request = ChatRequest(
       model: configuration.modelID,
       messages: [
@@ -28,7 +32,7 @@ final class OpenAICompatibleProvider: ChatGPTTimelinePromptSupporting {
           ]),
         .init(role: "user", content: content),
       ],
-      max_tokens: 8000
+      max_tokens: maxTokens
     )
     // Other compatible endpoints may not accept OpenRouter's reasoning object.
     if URL(string: configuration.endpoint)?.host?.lowercased() == "openrouter.ai" {
@@ -172,6 +176,9 @@ final class OpenAICompatibleProvider: ChatGPTTimelinePromptSupporting {
   }
 
   func generateText(prompt: String) async throws -> (text: String, log: LLMCall) {
-    try await transport.generateText(prompt: prompt)
+    try await transport.generateText(
+      prompt: prompt,
+      maxTokens: OllamaProvider.resolvedMaxOutputTokens(
+        fallback: OllamaProvider.openAICompatibleDefaultMaxOutputTokens))
   }
 }

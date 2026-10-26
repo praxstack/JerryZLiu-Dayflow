@@ -1,0 +1,89 @@
+import XCTest
+
+@testable import Dayflow
+
+final class OllamaProviderMaxTokensTests: XCTestCase {
+  func testMissingOverrideUsesDefault4000() {
+    let suite = "Dayflow.OllamaProviderMaxTokensTests.\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: suite)!
+    defer { defaults.removePersistentDomain(forName: suite) }
+    XCTAssertEqual(OllamaProvider.resolvedMaxOutputTokens(from: defaults), 4000)
+  }
+
+  func testZeroIsTreatedAsUnset() {
+    let suite = "Dayflow.OllamaProviderMaxTokensTests.\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: suite)!
+    defer { defaults.removePersistentDomain(forName: suite) }
+    defaults.set(0, forKey: OllamaProvider.maxOutputTokensDefaultsKey)
+    XCTAssertEqual(OllamaProvider.resolvedMaxOutputTokens(from: defaults), 4000)
+  }
+
+  func testPositiveOverrideWins() {
+    let suite = "Dayflow.OllamaProviderMaxTokensTests.\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: suite)!
+    defer { defaults.removePersistentDomain(forName: suite) }
+    defaults.set(32000, forKey: OllamaProvider.maxOutputTokensDefaultsKey)
+    XCTAssertEqual(OllamaProvider.resolvedMaxOutputTokens(from: defaults), 32000)
+  }
+
+  func testNegativeOverrideIsIgnored() {
+    let suite = "Dayflow.OllamaProviderMaxTokensTests.\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: suite)!
+    defer { defaults.removePersistentDomain(forName: suite) }
+    defaults.set(-1, forKey: OllamaProvider.maxOutputTokensDefaultsKey)
+    XCTAssertEqual(OllamaProvider.resolvedMaxOutputTokens(from: defaults), 4000)
+  }
+
+  func testCustomFallbackUsedWhenUnset() {
+    let suite = "Dayflow.OllamaProviderMaxTokensTests.\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: suite)!
+    defer { defaults.removePersistentDomain(forName: suite) }
+    XCTAssertEqual(
+      OllamaProvider.resolvedMaxOutputTokens(from: defaults, fallback: 2048), 2048)
+    XCTAssertEqual(
+      OllamaProvider.resolvedMaxOutputTokens(from: defaults, fallback: 65536), 65536)
+  }
+
+  func testRawDefaultsWriteValuesAreClampedOnRead() {
+    let suite = "Dayflow.OllamaProviderMaxTokensTests.\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: suite)!
+    defer { defaults.removePersistentDomain(forName: suite) }
+
+    defaults.set(200_000, forKey: OllamaProvider.maxOutputTokensDefaultsKey)
+    XCTAssertEqual(OllamaProvider.resolvedMaxOutputTokens(from: defaults), 128_000)
+
+    defaults.set(100, forKey: OllamaProvider.maxOutputTokensDefaultsKey)
+    XCTAssertEqual(OllamaProvider.resolvedMaxOutputTokens(from: defaults), 256)
+  }
+
+  func testPersistClampsToSupportedRange() {
+    let suite = "Dayflow.OllamaProviderMaxTokensTests.\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: suite)!
+    defer { defaults.removePersistentDomain(forName: suite) }
+
+    OllamaProvider.persistMaxOutputTokens(100, to: defaults)
+    XCTAssertEqual(OllamaProvider.storedMaxOutputTokensOverride(from: defaults), 256)
+
+    OllamaProvider.persistMaxOutputTokens(200_000, to: defaults)
+    XCTAssertEqual(OllamaProvider.storedMaxOutputTokensOverride(from: defaults), 128_000)
+  }
+
+  func testPersistWritesAndClearsTheSameKeyTheResolverReads() {
+    let suite = "Dayflow.OllamaProviderMaxTokensTests.\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: suite)!
+    defer { defaults.removePersistentDomain(forName: suite) }
+
+    OllamaProvider.persistMaxOutputTokens(32000, to: defaults)
+    XCTAssertEqual(defaults.integer(forKey: OllamaProvider.maxOutputTokensDefaultsKey), 32000)
+    XCTAssertEqual(OllamaProvider.storedMaxOutputTokensOverride(from: defaults), 32000)
+    XCTAssertEqual(OllamaProvider.resolvedMaxOutputTokens(from: defaults, fallback: 2048), 32000)
+
+    OllamaProvider.persistMaxOutputTokens(0, to: defaults)
+    XCTAssertNil(defaults.object(forKey: OllamaProvider.maxOutputTokensDefaultsKey))
+    XCTAssertNil(OllamaProvider.storedMaxOutputTokensOverride(from: defaults))
+    XCTAssertEqual(OllamaProvider.resolvedMaxOutputTokens(from: defaults), 4000)
+
+    OllamaProvider.persistMaxOutputTokens(nil, to: defaults)
+    XCTAssertNil(defaults.object(forKey: OllamaProvider.maxOutputTokensDefaultsKey))
+  }
+}

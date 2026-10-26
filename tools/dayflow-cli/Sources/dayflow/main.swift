@@ -10,6 +10,7 @@
 //
 
 import Foundation
+import DayflowCLICore
 
 let arguments = Array(CommandLine.arguments.dropFirst())
 let flags = Set(arguments.filter { $0.hasPrefix("--") })

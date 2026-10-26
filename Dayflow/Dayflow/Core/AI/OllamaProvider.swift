@@ -50,6 +50,50 @@ final class OllamaProvider {
     injectedRuntimeConfiguration == nil ? .local : .openAICompatible
   }
 
+  /// Chat-completions HTTP transport (OpenRouter/custom endpoint or Settings → custom local).
+  var usesOpenAICompatibleTransport: Bool {
+    providerID == .openAICompatible || isCustomEngine
+  }
+
+  var chatAPIErrorDomain: String {
+    providerID == .openAICompatible ? "OpenAICompatibleProvider" : "OllamaProvider"
+  }
+
+  func chatAPIFailureMessage(statusCode: Int, body: String) -> String {
+    if usesOpenAICompatibleTransport {
+      return
+        "OpenAI-compatible API request failed with status \(statusCode): \(body)"
+    }
+    return "Ollama API request failed with status \(statusCode): \(body)"
+  }
+
+  func localScreenshotDescriptionFailureMessage() -> String {
+    if isCustomEngine {
+      return
+        "Failed to describe any screenshots. Check that your OpenAI-compatible endpoint is reachable, the model supports vision, and any required API key is valid."
+    }
+    return
+      "Failed to describe any screenshots. Please check that Ollama/LMStudio is running."
+  }
+
+  func localScreenshotProcessingFailureMessage() -> String {
+    if isCustomEngine {
+      return
+        "Screenshots failed to process — check your OpenAI-compatible endpoint logs or report a bug."
+    }
+    return
+        "Screenshots failed to process - check Ollama/LMStudio logs or report a bug."
+  }
+
+  func localAIDownFailureMessage() -> String {
+    if isCustomEngine {
+      return
+        "It looks like your OpenAI-compatible endpoint is unreachable. Check the base URL, model, and API key in settings. If local AI is not an option, consider switching to Gemini in settings."
+    }
+    return
+      "It looks like your local AI is currently down. Please make sure that your Ollama/LMStudio is up and running properly. If you're having trouble getting local AI to work, consider switching to Gemini in settings."
+  }
+
   var authorizationBearerToken: String? {
     if let injectedRuntimeConfiguration {
       return injectedRuntimeConfiguration.bearerToken

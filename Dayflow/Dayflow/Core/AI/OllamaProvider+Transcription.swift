@@ -213,10 +213,7 @@ extension OllamaProvider {
     if observations.isEmpty {
       throw NSError(
         domain: "OllamaProvider", code: 11,
-        userInfo: [
-          NSLocalizedDescriptionKey:
-            "Screenshots failed to process - check Ollama/LMStudio logs or report a bug."
-        ])
+        userInfo: [NSLocalizedDescriptionKey: localScreenshotProcessingFailureMessage()])
     }
 
     if observations.count > 5 {
@@ -246,10 +243,7 @@ extension OllamaProvider {
       throw NSError(
         domain: "OllamaProvider",
         code: 11,
-        userInfo: [
-          NSLocalizedDescriptionKey:
-            "It looks like your local AI is currently down. Please make sure that your Ollama/LMStudio is up and running properly. If you're having trouble getting local AI to work, consider switching to Gemini in settings."
-        ]
+        userInfo: [NSLocalizedDescriptionKey: localAIDownFailureMessage()]
       )
     }
 
@@ -479,12 +473,14 @@ extension OllamaProvider {
 
     // Describe each screenshot
     var frameDescriptions: [(timestamp: TimeInterval, description: String)] = []
+    var readableFrameCount = 0
 
     for screenshot in sampledScreenshots {
       guard let frameData = loadScreenshotAsFrameData(screenshot, relativeTo: firstTs) else {
         print("[OLLAMA] ⚠️ Failed to load screenshot: \(screenshot.filePath)")
         continue
       }
+      readableFrameCount += 1
 
       if let description = await getSimpleFrameDescription(frameData, batchId: batchId) {
         frameDescriptions.append((timestamp: frameData.timestamp, description: description))
@@ -492,13 +488,14 @@ extension OllamaProvider {
     }
 
     guard !frameDescriptions.isEmpty else {
+      let message =
+        readableFrameCount == 0
+        ? "No readable screenshots to transcribe."
+        : localScreenshotDescriptionFailureMessage()
       throw NSError(
         domain: "OllamaProvider",
         code: 11,
-        userInfo: [
-          NSLocalizedDescriptionKey:
-            "Failed to describe any screenshots. Please check that Ollama/LMStudio is running."
-        ]
+        userInfo: [NSLocalizedDescriptionKey: message]
       )
     }
 

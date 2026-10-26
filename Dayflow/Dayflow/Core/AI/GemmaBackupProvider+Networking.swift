@@ -23,6 +23,9 @@ extension GemmaBackupProvider {
       "generationConfig": [
         "temperature": temperature,
         "maxOutputTokens": maxOutputTokens,
+        "thinkingConfig": [
+          "thinkingLevel": "minimal",
+        ],
       ],
     ]
 
@@ -90,8 +93,8 @@ extension GemmaBackupProvider {
       let candidates = json["candidates"] as? [[String: Any]],
       let firstCandidate = candidates.first,
       let content = firstCandidate["content"] as? [String: Any],
-      let parts = content["parts"] as? [[String: Any]],
-      let text = parts.first?["text"] as? String
+      let responseParts = content["parts"] as? [[String: Any]],
+      let text = Self.extractGenerativeText(from: responseParts)
     else {
       LLMLogger.logFailure(
         ctx: ctx,
@@ -113,6 +116,20 @@ extension GemmaBackupProvider {
     )
 
     return text
+  }
+
+  /// Concatenates visible `text` fields from Gemini `generateContent` parts, skipping reasoning parts.
+  static func extractGenerativeText(from parts: [[String: Any]]) -> String? {
+    let visibleText = parts.compactMap { part -> String? in
+      if part["thought"] as? Bool == true {
+        return nil
+      }
+      guard let text = part["text"] as? String else { return nil }
+      let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+      return trimmed.isEmpty ? nil : text
+    }
+    guard !visibleText.isEmpty else { return nil }
+    return visibleText.joined()
   }
 
   func extractErrorMessage(from data: Data, fallback: String) -> String {

@@ -4,11 +4,16 @@ import XCTest
 @testable import Dayflow
 
 final class OpenAICompatibleProviderTests: XCTestCase {
-  private func configuration(_ endpoint: String = "https://openrouter.ai/api/v1")
+  private func configuration(
+    _ endpoint: String = "https://openrouter.ai/api/v1",
+    maxImagesPerRequest: Int = OpenAICompatibleScreenshotBudget.defaultLimit
+  )
     -> OpenAICompatibleRuntimeConfiguration
   {
     .init(
-      configuration: .init(preset: .custom, baseURL: endpoint, modelID: "chosen-model"),
+      configuration: .init(
+        preset: .custom, baseURL: endpoint, modelID: "chosen-model",
+        maxImagesPerRequest: maxImagesPerRequest),
       bearerToken: "test-token")
   }
 
@@ -61,6 +66,32 @@ final class OpenAICompatibleProviderTests: XCTestCase {
     XCTAssertEqual(result.observations.first?.llmModel, "chosen-model")
   }
 
+  func testScreenshotsHonorConfiguredImageBudget() async throws {
+    let image = NSBitmapImageRep(
+      bitmapDataPlanes: nil, pixelsWide: 2, pixelsHigh: 2, bitsPerSample: 8,
+      samplesPerPixel: 3, hasAlpha: false, isPlanar: false, colorSpaceName: .deviceRGB,
+      bytesPerRow: 0, bitsPerPixel: 0)!
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent(
+      "\(UUID().uuidString).jpg")
+    try XCTUnwrap(image.representation(using: .jpeg, properties: [:])).write(to: url)
+    defer { try? FileManager.default.removeItem(at: url) }
+    let screenshots = (0..<31).map { index in
+      Screenshot(
+        id: Int64(index), capturedAt: 1000 + index * 30, filePath: url.path,
+        fileSize: nil, idleSecondsAtCapture: nil, isDeleted: false)
+    }
+    var imageCount = 0
+    let provider = OpenAICompatibleProvider(configuration: configuration(maxImagesPerRequest: 8)) {
+      request, _, _ in
+      imageCount = request.messages[1].content.filter { $0.type == "image_url" }.count
+      return
+        #"{"segments":[{"start":"00:00:00","end":"00:15:00","description":"Edited the release notes."}]}"#
+    }
+    _ = try await provider.transcribeScreenshots(
+      screenshots, batchStartTime: Date(timeIntervalSince1970: 1000), batchId: 1)
+    XCTAssertEqual(imageCount, 8)
+  }
+
   func testCardRetryRetainsFullContextAndReturnsDetailedCards() async throws {
     let previous = ActivityCardData(
       startTime: "1:00 PM", endTime: "1:15 PM", category: "Work", subcategory: "",
@@ -73,7 +104,7 @@ final class OpenAICompatibleProviderTests: XCTestCase {
     let provider = OpenAICompatibleProvider(configuration: configuration()) { request, _, _ in
       requests += 1
       let prompt = request.messages[1].content[0].text!
-      XCTAssertTrue(prompt.contains("Previous cards:"))
+      XCTAssertTrue(prompt.contains("<previous_cards>"))
       XCTAssertTrue(prompt.contains("Release notes"))
       if requests == 1 { return "[]" }
       XCTAssertTrue(prompt.contains("PREVIOUS ATTEMPT FAILED"))

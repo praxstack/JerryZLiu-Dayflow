@@ -127,6 +127,11 @@ extension OllamaProvider {
 
         guard httpResponse.statusCode == 200 else {
           let errorBody = String(data: data, encoding: .utf8) ?? "Unknown error"
+          let userFacingError: String =
+            providerID == .openAICompatible
+            ? OpenAICompatibleHTTPErrorFormatter.userMessage(
+              statusCode: httpResponse.statusCode, body: data)
+            : "Ollama API request failed with status \(httpResponse.statusCode): \(errorBody)"
           // Log failure with response body via centralized logger
           let responseHeaders: [String: String] = httpResponse.allHeaderFields.reduce(into: [:]) {
             acc, kv in
@@ -147,10 +152,7 @@ extension OllamaProvider {
           didLogFailureThisAttempt = true
           throw NSError(
             domain: "OllamaProvider", code: 4,
-            userInfo: [
-              NSLocalizedDescriptionKey:
-                "Ollama API request failed with status \(httpResponse.statusCode): \(errorBody)"
-            ])
+            userInfo: [NSLocalizedDescriptionKey: userFacingError])
         }
 
         do {

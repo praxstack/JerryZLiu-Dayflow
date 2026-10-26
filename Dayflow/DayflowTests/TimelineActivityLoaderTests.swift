@@ -23,6 +23,42 @@ final class TimelineActivityLoaderTests: XCTestCase {
     XCTAssertEqual(segments[0].end, date(minute: 46))
   }
 
+  func testDetailPanelActivityExpandsMergedFailures() {
+    let activities = [
+      activity(
+        id: "failure-1",
+        startMinute: 0,
+        endMinute: 15,
+        title: "Processing failed",
+        batchId: 1,
+        summary: "Quota exceeded"),
+      activity(
+        id: "failure-2",
+        startMinute: 15,
+        endMinute: 30,
+        title: "Processing failed",
+        batchId: 2,
+        summary: "Network error"),
+      activity(
+        id: "failure-3",
+        startMinute: 31,
+        endMinute: 46,
+        title: "Processing failed",
+        batchId: 3,
+        summary: "Network error"),
+    ]
+
+    let segment = TimelineActivityLoader.resolveDisplaySegments(from: activities)[0]
+    let detail = segment.detailPanelActivity
+
+    XCTAssertEqual(detail.startTime, date(minute: 0))
+    XCTAssertEqual(detail.endTime, date(minute: 46))
+    XCTAssertEqual(detail.groupedBatchIds, [1, 2, 3])
+    XCTAssertTrue(detail.summary.contains("Quota exceeded"))
+    XCTAssertTrue(detail.summary.contains("Network error"))
+    XCTAssertEqual(detail.summary.components(separatedBy: "Network error").count - 1, 1)
+  }
+
   func testResolveDisplaySegmentsDoesNotGroupAcrossAnotherActivity() {
     let activities = [
       activity(
@@ -57,7 +93,8 @@ final class TimelineActivityLoaderTests: XCTestCase {
     startMinute: Int,
     endMinute: Int,
     title: String,
-    batchId: Int64? = nil
+    batchId: Int64? = nil,
+    summary: String = ""
   ) -> TimelineActivity {
     TimelineActivity(
       id: id,
@@ -66,7 +103,7 @@ final class TimelineActivityLoaderTests: XCTestCase {
       startTime: date(minute: startMinute),
       endTime: date(minute: endMinute),
       title: title,
-      summary: "",
+      summary: summary,
       detailedSummary: "",
       category: title == "Idle" ? "Idle" : "System",
       subcategory: "",

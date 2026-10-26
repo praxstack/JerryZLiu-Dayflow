@@ -561,7 +561,7 @@ struct WeekTimelineGridView: View {
           positioned.append(
             WeekPositionedActivity(
               id: segment.activity.id,
-              activity: segment.activity,
+              activity: segment.detailPanelActivity,
               columnIndex: dayLookup[day.dayString] ?? 0,
               yPosition: calculateYPosition(for: segment.start) + 1,
               height: height,

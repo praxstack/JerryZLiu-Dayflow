@@ -42,7 +42,7 @@ final class AnalysisManager: AnalysisManaging {
   // Video Processing Constants - removed old summary generation
 
   private let checkInterval: TimeInterval = 60  // every minute
-  private let maxLookback: TimeInterval = 24 * 60 * 60  // only last 24h
+  private var maxLookback: TimeInterval { FailedBatchAutomaticRetryPolicy.maxLookback }
   // Note: target batch duration and max gap are controlled via llmService.batchingConfig.
 
   private var analysisTimer: Timer?
@@ -52,7 +52,9 @@ final class AnalysisManager: AnalysisManaging {
   // Automatic catch-up: after any batch succeeds, failed batches from the last
   // 24 hours are retried one at a time. The three properties below are only
   // touched on `queue`.
-  private let maxAutomaticRetriesPerBatch = 3
+  private var maxAutomaticRetriesPerBatch: Int {
+    FailedBatchAutomaticRetryPolicy.maxAutomaticRetriesPerBatch
+  }
   private var automaticRetryCounts: [Int64: Int] = [:]
   private var isCatchingUpFailedBatches = false
   private var isManualRetryRunning = false
@@ -66,6 +68,25 @@ final class AnalysisManager: AnalysisManaging {
     inFlightLock.lock()
     defer { inFlightLock.unlock() }
     return inFlightBatchIds.contains(batchId)
+  }
+
+  /// Whether automatic catch-up would still retry this batch (24h window, attempt
+  /// budget, retryable failed card still on the timeline).
+  func isBatchEligibleForAutomaticRetry(batchId: Int64, now: Date = Date()) -> Bool {
+    queue.sync {
+      let retryableOnTimeline = FailedBatchAutomaticRetryPolicy.retryableFailedBatchIdsOnTimeline(
+        store: store,
+        now: now
+      )
+      return FailedBatchAutomaticRetryPolicy.isBatchEligibleForAutomaticRetry(
+        batchId: batchId,
+        allBatches: store.allBatches(),
+        retryableFailedBatchIdsOnTimeline: retryableOnTimeline,
+        automaticRetryCounts: automaticRetryCounts,
+        isBatchInFlight: { self.isBatchInFlight($0) },
+        now: now
+      )
+    }
   }
 
   private func setBatchInFlight(_ batchId: Int64, _ isInFlight: Bool) {
@@ -487,32 +508,17 @@ final class AnalysisManager: AnalysisManaging {
   /// their automatic tries. A batch left in "processing" by a quit mid-retry
   /// counts as failed; one the LLM is working on right now does not.
   private func failedBatchIdsToRetryAutomatically(now: Date = Date()) -> [Int64] {
-    let cutoff = Int(now.timeIntervalSince1970 - maxLookback)
-    let recentFailedBatches = store.allBatches()
-      .filter { $0.status == "failed" || $0.status == "processing" }
-      .filter { $0.start >= cutoff && !isBatchInFlight($0.id) }
-      .filter { automaticRetryCounts[$0.id, default: 0] < maxAutomaticRetriesPerBatch }
-      .sorted { $0.start < $1.start }
-    guard !recentFailedBatches.isEmpty else { return [] }
-
-    // Only batches whose failed card is still on the timeline. A later batch's
-    // cards can replace an older failed card, and retrying that batch would
-    // write overlapping cards.
-    let days = Set([
-      now.getDayInfoFor4AMBoundary().dayString,
-      now.addingTimeInterval(-maxLookback).getDayInfoFor4AMBoundary().dayString,
-    ])
-    var retryableBatchIds = Set<Int64>()
-    for day in days {
-      for card in store.fetchTimelineCards(forDay: day)
-      where TimelineActivityLoader.isRetryableFailedCard(card, storageManager: store) {
-        if let batchId = card.batchId {
-          retryableBatchIds.insert(batchId)
-        }
-      }
-    }
-
-    return recentFailedBatches.map(\.id).filter { retryableBatchIds.contains($0) }
+    let retryableOnTimeline = FailedBatchAutomaticRetryPolicy.retryableFailedBatchIdsOnTimeline(
+      store: store,
+      now: now
+    )
+    return FailedBatchAutomaticRetryPolicy.batchIdsEligibleForAutomaticRetry(
+      allBatches: store.allBatches(),
+      retryableFailedBatchIdsOnTimeline: retryableOnTimeline,
+      automaticRetryCounts: automaticRetryCounts,
+      isBatchInFlight: { isBatchInFlight($0) },
+      now: now
+    )
   }
 
   private func processRecordings() {

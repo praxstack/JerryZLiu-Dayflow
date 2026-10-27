@@ -83,13 +83,26 @@ final class RetryCoordinator: ObservableObject {
     return batchIds.contains(activeBatchId)
   }
 
-  func startRetry(for dayString: String, onBatchCompleted: @escaping (Int64) -> Void) {
+  func manualRetryFailed(for batchId: Int64?) -> Bool {
+    guard let batchId, let status = statuses[batchId] else { return false }
+    return status == .failed
+  }
+
+  func startRetry(
+    for dayString: String,
+    priorityBatchIds: [Int64] = [],
+    onBatchCompleted: @escaping (Int64) -> Void
+  ) {
     guard !isRunning else { return }
     isRunning = true
     AnalysisManager.shared.setManualRetryRunning(true)
 
     Task.detached {
-      let batchIds = Self.failedBatchIds(for: dayString)
+      let chronological = Self.failedBatchIds(for: dayString)
+      let batchIds = FailedBatchRetryQueueOrdering.orderedBatchIds(
+        chronologicalFailedBatchIds: chronological,
+        priorityBatchIds: priorityBatchIds
+      )
       await MainActor.run {
         self.beginQueue(batchIds: batchIds, onBatchCompleted: onBatchCompleted)
       }
@@ -173,18 +186,11 @@ final class RetryCoordinator: ObservableObject {
           self.processNext(index: index + 1, batchIds: batchIds, onBatchCompleted: onBatchCompleted)
         case .failure:
           self.statuses[batchId] = .failed
-          self.markRemainingStopped(from: index + 1, batchIds: batchIds)
-          self.finishRun()
+          self.processNext(
+            index: index + 1, batchIds: batchIds, onBatchCompleted: onBatchCompleted)
         }
       }
     )
-  }
-
-  private func markRemainingStopped(from index: Int, batchIds: [Int64]) {
-    guard index < batchIds.count else { return }
-    for i in index..<batchIds.count {
-      statuses[batchIds[i]] = .stopped
-    }
   }
 
   private func finishRun() {

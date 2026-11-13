@@ -415,12 +415,29 @@ struct ActivityCard: View {
   /// ("Failed to process 15 minutes… An unexpected error occurred."), so they
   /// get a plain sentence instead. Newer failed cards are already plain.
   private func summaryText(for activity: TimelineActivity) -> String {
-    guard isFailedCard(activity), activity.summary.hasPrefix("Failed to process") else {
+    guard isFailedCard(activity) else {
       return activity.summary
     }
-    return String(
-      localized:
-        "This time couldn't be turned into cards yet. Dayflow will try again automatically. Your recording is saved."
+
+    let storedSummary: String
+    if activity.summary.hasPrefix("Failed to process") {
+      storedSummary = String(
+        localized:
+          "This time couldn't be turned into cards yet. Dayflow will try again automatically. Your recording is saved."
+      )
+    } else {
+      storedSummary = activity.summary
+    }
+
+    let automaticRetryStillPossible =
+      !retryCoordinator.manualRetryFailed(for: activity.batchId)
+      && (activity.batchId.map {
+        AnalysisManager.shared.isBatchEligibleForAutomaticRetry(batchId: $0)
+      } ?? false)
+
+    return TimelineFailureSummaryDisplay.displayedSummary(
+      storedSummary: storedSummary,
+      automaticRetryStillPossible: automaticRetryStillPossible
     )
   }
 
@@ -540,7 +557,8 @@ struct ActivityCard: View {
 
   private func handleRetry(for activity: TimelineActivity) {
     let dayString = activity.startTime.getDayInfoFor4AMBoundary().dayString
-    retryCoordinator.startRetry(for: dayString) { batchId in
+    let priorityBatchIds = activity.batchId.map { [$0] } ?? []
+    retryCoordinator.startRetry(for: dayString, priorityBatchIds: priorityBatchIds) { batchId in
       onRetryBatchCompleted?(batchId)
     }
   }

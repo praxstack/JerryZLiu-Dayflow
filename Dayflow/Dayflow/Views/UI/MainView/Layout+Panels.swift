@@ -403,7 +403,10 @@ extension MainView {
         },
         onRetryBatchCompleted: { batchId in
           refreshActivitiesTrigger &+= 1
-          if selectedActivity?.batchId == batchId {
+          let matchesSelection =
+            selectedActivity?.batchId == batchId
+            || selectedActivity?.groupedBatchIds?.contains(batchId) == true
+          if matchesSelection {
             clearTimelineSelection()
           }
         }

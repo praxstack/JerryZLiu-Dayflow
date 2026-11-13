@@ -260,7 +260,8 @@ struct ActivityCard: View {
       }
 
       // Error message (if retry failed)
-      if isFailedCard(activity), let statusLine = retryCoordinator.statusLine(for: activity.batchId)
+      if isFailedCard(activity),
+        let statusLine = retryCoordinator.statusLine(for: retryBatchIds(for: activity))
       {
         Text(statusLine)
           .font(.custom("Figtree", size: 11))
@@ -330,7 +331,7 @@ struct ActivityCard: View {
         }
     } else {
       HStack(alignment: .center, spacing: 6) {
-        Text(isFailedCard(activity) ? String(localized: "Processing failed") : activity.title)
+        Text(failedCardTitle(for: activity))
           .font(
             Font.custom("Figtree", size: 16)
               .weight(.semibold)
@@ -414,14 +415,19 @@ struct ActivityCard: View {
   /// Failed cards saved before the failure rework carry raw error text
   /// ("Failed to process 15 minutes… An unexpected error occurred."), so they
   /// get a plain sentence instead. Newer failed cards are already plain.
+  private func failedCardTitle(for activity: TimelineActivity) -> String {
+    guard isFailedCard(activity) else { return activity.title }
+    let failedTitle = String(localized: "Processing failed")
+    let intervalCount = mergedFailureIntervalCount(for: activity)
+    guard intervalCount > 1 else { return failedTitle }
+    return String(localized: "\(failedTitle) · \(intervalCount) intervals")
+  }
+
   private func summaryText(for activity: TimelineActivity) -> String {
-    guard isFailedCard(activity), activity.summary.hasPrefix("Failed to process") else {
+    if isFailedCard(activity), activity.groupedBatchIds != nil {
       return activity.summary
     }
-    return String(
-      localized:
-        "This time couldn't be turned into cards yet. Dayflow will try again automatically. Your recording is saved."
-    )
+    return TimelineActivityLoader.failureSummaryDisplayText(for: activity)
   }
 
   private func renderMarkdownText(_ content: String) -> Text {
@@ -485,9 +491,24 @@ struct ActivityCard: View {
     return activity.title == "Processing failed"
   }
 
+  private func retryBatchIds(for activity: TimelineActivity) -> [Int64] {
+    if let groupedBatchIds = activity.groupedBatchIds, !groupedBatchIds.isEmpty {
+      return groupedBatchIds
+    }
+    if let batchId = activity.batchId {
+      return [batchId]
+    }
+    return []
+  }
+
+  private func mergedFailureIntervalCount(for activity: TimelineActivity) -> Int {
+    max(retryBatchIds(for: activity).count, 1)
+  }
+
   @ViewBuilder
   private func retryButtonInline(for activity: TimelineActivity) -> some View {
-    let isProcessing = retryCoordinator.isActive(batchId: activity.batchId)
+    let batchIds = retryBatchIds(for: activity)
+    let isProcessing = retryCoordinator.isActive(batchIds: batchIds)
     let isDisabled = retryCoordinator.isRunning
 
     if isProcessing {

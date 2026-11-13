@@ -660,7 +660,7 @@ struct CanvasTimelineDataView: View {
 
         return CanvasPositionedActivity(
           id: seg.activity.id,
-          activity: seg.activity,
+          activity: seg.detailPanelActivity,
           yPosition: y + 1,  // 1px top spacing
           height: height,
           durationMinutes: durationMinutes,

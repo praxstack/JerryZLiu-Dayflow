@@ -28,6 +28,30 @@ struct TimelineDisplaySegment {
     start = min(start, activity.startTime)
     end = max(end, activity.endTime)
   }
+
+  /// Activity passed to the detail panel; expands merged failure intervals for time range and summaries.
+  var detailPanelActivity: TimelineActivity {
+    guard failureCount > 1 else { return activity }
+
+    return TimelineActivity(
+      id: activity.id,
+      recordId: activity.recordId,
+      batchId: activity.batchId,
+      startTime: start,
+      endTime: end,
+      title: activity.title,
+      summary: TimelineActivityLoader.mergedFailureSummary(for: activities),
+      detailedSummary: "",
+      category: activity.category,
+      subcategory: activity.subcategory,
+      distractions: activity.distractions,
+      videoSummaryURL: activity.videoSummaryURL,
+      screenshot: activity.screenshot,
+      appSites: activity.appSites,
+      isBackupGenerated: activity.isBackupGenerated,
+      groupedBatchIds: batchIds
+    )
+  }
 }
 
 struct TimelineRecordingProjectionWindow {
@@ -39,6 +63,12 @@ enum TimelineActivityLoader {
   // Stored card titles are always the English sentinel, regardless of UI language.
   private static let failedTitle = "Processing failed"
   private static let failureGroupingGapTolerance: TimeInterval = 60
+
+  private static let failureDetailTimeFormatter: DateFormatter = {
+    let formatter = DateFormatter()
+    formatter.timeStyle = .short
+    return formatter
+  }()
 
   private static let timeFormatter: DateFormatter = {
     let formatter = DateFormatter()
@@ -280,6 +310,37 @@ enum TimelineActivityLoader {
     }
 
     return segments
+  }
+
+  static func mergedFailureSummary(for activities: [TimelineActivity]) -> String {
+    var seenSummaries = Set<String>()
+    var lines: [String] = []
+
+    for activity in activities {
+      let summary = failureSummaryDisplayText(for: activity)
+      let normalized = summary.trimmingCharacters(in: .whitespacesAndNewlines)
+      guard !normalized.isEmpty else { continue }
+      guard seenSummaries.insert(normalized).inserted else { continue }
+
+      let range =
+        "\(failureDetailTimeFormatter.string(from: activity.startTime)) - \(failureDetailTimeFormatter.string(from: activity.endTime))"
+      lines.append("\(range): \(summary)")
+    }
+
+    if lines.isEmpty {
+      return failureSummaryDisplayText(for: activities[0])
+    }
+    return lines.joined(separator: "\n\n")
+  }
+
+  static func failureSummaryDisplayText(for activity: TimelineActivity) -> String {
+    guard activity.title == failedTitle, activity.summary.hasPrefix("Failed to process") else {
+      return activity.summary
+    }
+    return String(
+      localized:
+        "This time couldn't be turned into cards yet. Dayflow will try again automatically. Your recording is saved."
+    )
   }
 
   static func recordingProjectionWindow(
